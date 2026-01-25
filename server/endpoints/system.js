@@ -163,8 +163,11 @@ function systemEndpoints(app) {
   app.post("/request-token", async (request, response) => {
     try {
       const bcrypt = require("bcryptjs");
+      const { username, password } = reqBody(request);
 
-      if (await SystemSettings.isMultiUserMode()) {
+      // 强制使用多用户模式登录（通过用户名和密码）
+      // 无论 MultiUserMode 设置如何，都尝试从用户表验证
+      if (username) {
         if (simpleSSOLoginDisabled()) {
           response.status(403).json({
             user: null,
@@ -176,7 +179,6 @@ function systemEndpoints(app) {
           return;
         }
 
-        const { username, password } = reqBody(request);
         const existingUser = await User._get({ username: String(username) });
 
         if (!existingUser) {
@@ -235,7 +237,7 @@ function systemEndpoints(app) {
 
         await Telemetry.sendTelemetry(
           "login_event",
-          { multiUserMode: false },
+          { multiUserMode: true },
           existingUser?.id
         );
 
@@ -274,7 +276,7 @@ function systemEndpoints(app) {
         });
         return;
       } else {
-        const { password } = reqBody(request);
+        // 后备：单用户密码模式（仅当没有提供用户名时）
         if (
           !bcrypt.compareSync(
             password,

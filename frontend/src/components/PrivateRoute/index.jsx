@@ -11,6 +11,7 @@ import { KeyboardShortcutWrapper } from "@/utils/keyboardShortcuts";
 
 // Used only for Multi-user mode only as we permission specific pages based on auth role.
 // When in single user mode we just bypass any authchecks.
+// Modified: 强制要求登录认证，无论系统设置如何
 function useIsAuthenticated() {
   const [isAuthd, setIsAuthed] = useState(null);
   const [shouldRedirectToOnboarding, setShouldRedirectToOnboarding] =
@@ -28,53 +29,65 @@ function useIsAuthenticated() {
 
       setMultiUserMode(MultiUserMode);
 
-      // Check for the onboarding redirect condition
+      // 始终检查本地是否有有效的登录 token
+      const localAuthToken = localStorage.getItem(AUTH_TOKEN);
+      const localUser = localStorage.getItem(AUTH_USER);
+
+      // 如果没有本地 token，强制跳转到登录页
+      if (!localAuthToken) {
+        setIsAuthed(false);
+        return;
+      }
+
+      // Check for the onboarding redirect condition (only if already authenticated)
       if (
         !MultiUserMode &&
         !RequiresAuth && // Not in Multi-user AND no password set.
         !LLMProvider &&
         !VectorDB
       ) {
-        setShouldRedirectToOnboarding(true);
-        setIsAuthed(true);
-        return;
+        // 如果有 token 但系统未设置，仍然允许访问 onboarding
+        const isValid = await validateSessionTokenForUser();
+        if (isValid) {
+          setShouldRedirectToOnboarding(true);
+          setIsAuthed(true);
+          return;
+        } else {
+          setIsAuthed(false);
+          return;
+        }
       }
 
-      if (!MultiUserMode && !RequiresAuth) {
-        setIsAuthed(true);
-        return;
-      }
-
-      // Single User password mode check
-      if (!MultiUserMode && RequiresAuth) {
-        const localAuthToken = localStorage.getItem(AUTH_TOKEN);
-        if (!localAuthToken) {
+      // 验证 token 有效性
+      if (MultiUserMode) {
+        // Multi-user mode: 需要用户信息和 token
+        if (!localUser) {
           setIsAuthed(false);
           return;
         }
 
         const isValid = await validateSessionTokenForUser();
-        setIsAuthed(isValid);
-        return;
-      }
+        if (!isValid) {
+          localStorage.removeItem(AUTH_USER);
+          localStorage.removeItem(AUTH_TOKEN);
+          localStorage.removeItem(AUTH_TIMESTAMP);
+          setIsAuthed(false);
+          return;
+        }
 
-      const localUser = localStorage.getItem(AUTH_USER);
-      const localAuthToken = localStorage.getItem(AUTH_TOKEN);
-      if (!localUser || !localAuthToken) {
-        setIsAuthed(false);
-        return;
+        setIsAuthed(true);
+      } else {
+        // Single user mode: 只需要 token
+        const isValid = await validateSessionTokenForUser();
+        if (!isValid) {
+          localStorage.removeItem(AUTH_TOKEN);
+          localStorage.removeItem(AUTH_USER);
+          localStorage.removeItem(AUTH_TIMESTAMP);
+          setIsAuthed(false);
+          return;
+        }
+        setIsAuthed(true);
       }
-
-      const isValid = await validateSessionTokenForUser();
-      if (!isValid) {
-        localStorage.removeItem(AUTH_USER);
-        localStorage.removeItem(AUTH_TOKEN);
-        localStorage.removeItem(AUTH_TIMESTAMP);
-        setIsAuthed(false);
-        return;
-      }
-
-      setIsAuthed(true);
     };
     validateSession();
   }, []);
