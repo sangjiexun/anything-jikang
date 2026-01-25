@@ -139,6 +139,9 @@ export default {
     branding: () => {
       return "/settings/branding";
     },
+    themeColors: () => {
+      return "/settings/theme-colors";
+    },
     agentSkills: () => {
       return "/settings/agents";
     },

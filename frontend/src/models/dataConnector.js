@@ -228,6 +228,70 @@ const DataConnector = {
         });
     },
   },
+
+  s3Storage: {
+    collect: async function ({
+      endpoint,
+      region,
+      accessKeyId,
+      secretAccessKey,
+      bucket,
+      prefix,
+    }) {
+      return await fetch(`${API_BASE}/ext/s3-storage`, {
+        method: "POST",
+        headers: baseHeaders(),
+        body: JSON.stringify({
+          endpoint,
+          region,
+          accessKeyId,
+          secretAccessKey,
+          bucket,
+          prefix,
+        }),
+      })
+        .then((res) => res.json())
+        .then((res) => {
+          if (!res.success) throw new Error(res.reason);
+          return { data: res.data, error: null };
+        })
+        .catch((e) => {
+          console.error(e);
+          return { data: null, error: e.message };
+        });
+    },
+  },
+
+  tencentCOS: {
+    collect: async function ({
+      secretId,
+      secretKey,
+      bucket,
+      region,
+      prefix,
+    }) {
+      return await fetch(`${API_BASE}/ext/tencent-cos`, {
+        method: "POST",
+        headers: baseHeaders(),
+        body: JSON.stringify({
+          secretId,
+          secretKey,
+          bucket,
+          region,
+          prefix,
+        }),
+      })
+        .then((res) => res.json())
+        .then((res) => {
+          if (!res.success) throw new Error(res.reason);
+          return { data: res.data, error: null };
+        })
+        .catch((e) => {
+          console.error(e);
+          return { data: null, error: e.message };
+        });
+    },
+  },
 };
 
 export default DataConnector;

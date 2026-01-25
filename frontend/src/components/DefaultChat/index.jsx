@@ -3,17 +3,16 @@ import paths from "@/utils/paths";
 import { isMobile } from "react-device-detect";
 import useUser from "@/hooks/useUser";
 import Appearance from "@/models/appearance";
-import useLogo from "@/hooks/useLogo";
 import Workspace from "@/models/workspace";
 import { NavLink } from "react-router-dom";
 import { LAST_VISITED_WORKSPACE } from "@/utils/constants";
 import { useTranslation } from "react-i18next";
 import { safeJsonParse } from "@/utils/request";
+import { TextLogoLarge } from "@/components/TextLogo";
 
 export default function DefaultChatContainer() {
   const { t } = useTranslation();
   const { user } = useUser();
-  const { logo } = useLogo();
   const [lastVisitedWorkspace, setLastVisitedWorkspace] = useState(null);
   const [{ workspaces, loading }, setWorkspaces] = useState({
     workspaces: [],
@@ -74,12 +73,8 @@ export default function DefaultChatContainer() {
   return (
     <Layout>
       <div className="w-full h-full flex flex-col items-center justify-center overflow-y-auto no-scroll">
-        <img
-          src={logo}
-          alt="Custom Logo"
-          className=" w-[200px] h-fit mb-5 rounded-lg"
-        />
-        <h1 className="text-white text-2xl font-semibold">
+        <TextLogoLarge className="mb-5" />
+        <h1 className="text-theme-text-primary text-2xl font-semibold">
           {t("home.welcome")}, {user.username}!
         </h1>
         <p className="text-theme-home-text-secondary text-base text-center whitespace-pre-line">

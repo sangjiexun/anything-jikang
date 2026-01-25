@@ -11,6 +11,8 @@ import ConnectorOption from "./ConnectorOption";
 import WebsiteDepthOptions from "./Connectors/WebsiteDepth";
 import ObsidianOptions from "./Connectors/Obsidian";
 import PaperlessNgxOptions from "./Connectors/PaperlessNgx";
+import S3StorageOptions from "./Connectors/S3Storage";
+import TencentCOSOptions from "./Connectors/TencentCOS";
 
 export const getDataConnectors = (t) => ({
   github: {
@@ -60,6 +62,18 @@ export const getDataConnectors = (t) => ({
     image: ConnectorImages.paperlessNgx,
     description: "Import documents from your Paperless-ngx instance.",
     options: <PaperlessNgxOptions />,
+  },
+  "s3-storage": {
+    name: "S3 对象存储",
+    image: ConnectorImages.s3,
+    description: "从 AWS S3 或 S3 兼容存储 (MinIO, R2 等) 导入文档。",
+    options: <S3StorageOptions />,
+  },
+  "tencent-cos": {
+    name: "腾讯云 COS",
+    image: ConnectorImages.tencentCOS,
+    description: "从腾讯云对象存储 (COS) 导入文档。",
+    options: <TencentCOSOptions />,
   },
 });
 

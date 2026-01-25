@@ -207,20 +207,325 @@
   --theme-button-delete-hover-bg: #fee4e2;
 }
 
-[data-theme="light"] .text-white {
+/* 极康金主题 - 沙漠金+高级灰 (默认配色) */
+[data-theme="jikang-gold"] {
+  --theme-loader: #d4a85a;
+  --theme-bg-primary: #1a1915;
+  --theme-bg-secondary: #242219;
+  --theme-bg-sidebar: #1a1915;
+  --theme-bg-container: #1a1915;
+  --theme-bg-chat: #242219;
+  --theme-bg-chat-input: #2d2a22;
+  --theme-text-primary: #f5e6c8;
+  --theme-text-secondary: rgba(245, 230, 200, 0.7);
+  --theme-placeholder: #8b7355;
+  --theme-sidebar-item-default: rgba(212, 168, 90, 0.1);
+  --theme-sidebar-item-selected: rgba(212, 168, 90, 0.3);
+  --theme-sidebar-item-hover: #3d3628;
+  --theme-sidebar-subitem-default: rgba(212, 168, 90, 0.05);
+  --theme-sidebar-subitem-selected: rgba(212, 168, 90, 0.1);
+  --theme-sidebar-thread-selected: rgba(212, 168, 90, 0.08);
+  --theme-popup-menu-bg: #1a1915;
+
+  --theme-sidebar-subitem-hover: rgba(212, 168, 90, 0.08);
+  --theme-sidebar-border: rgba(212, 168, 90, 0.2);
+  --theme-sidebar-item-workspace-active: #d4a85a;
+  --theme-sidebar-item-workspace-inactive: #a89070;
+
+  --theme-sidebar-footer-icon: rgba(212, 168, 90, 0.15);
+  --theme-sidebar-footer-icon-fill: #d4a85a;
+  --theme-sidebar-footer-icon-hover: rgba(212, 168, 90, 0.25);
+
+  --theme-chat-input-border: #5a4d3a;
+  --theme-action-menu-bg: #2d2a22;
+  --theme-action-menu-item-hover: rgba(212, 168, 90, 0.15);
+  --theme-settings-input-bg: #1a1915;
+  --theme-settings-input-placeholder: rgba(245, 230, 200, 0.5);
+  --theme-settings-input-active: rgba(212, 168, 90, 0.3);
+  --theme-settings-input-text: #f5e6c8;
+  --theme-modal-border: #5a4d3a;
+
+  --theme-button-primary: #d4a85a;
+  --theme-button-primary-hover: #4a4235;
+
+  --theme-button-cta: #e8c078;
+
+  --theme-file-row-even: #1a1915;
+  --theme-file-row-odd: #242219;
+  --theme-file-row-selected-even: rgba(212, 168, 90, 0.2);
+  --theme-file-row-selected-odd: rgba(212, 168, 90, 0.15);
+  --theme-file-picker-hover: rgba(212, 168, 90, 0.2);
+
+  --theme-home-text: #f5e6c8;
+  --theme-home-text-secondary: #a89070;
+  --theme-home-bg-card: #242219;
+  --theme-home-bg-button: #2d2a22;
+  --theme-home-border: rgba(212, 168, 90, 0.2);
+  --theme-home-button-primary: #d4a85a;
+  --theme-home-button-primary-hover: rgba(212, 168, 90, 0.85);
+  --theme-home-button-secondary: #2d2a22;
+  --theme-home-button-secondary-hover: rgba(212, 168, 90, 0.15);
+  --theme-home-button-secondary-text: #f5e6c8;
+  --theme-home-button-secondary-hover-text: #d4a85a;
+  --theme-home-update-card-bg: #242219;
+  --theme-home-update-card-hover: #2d2a22;
+  --theme-home-update-source: #d4a85a;
+
+  --theme-checklist-item-bg: #3d3220;
+  --theme-checklist-item-bg-hover: #4a3d28;
+  --theme-checklist-item-text: #e8c078;
+  --theme-checklist-item-completed-bg: #2d3a28;
+  --theme-checklist-item-completed-text: #a6f4c5;
+  --theme-checklist-checkbox-fill: #a6f4c5;
+  --theme-checklist-checkbox-text: #2d3a28;
+  --theme-checklist-item-hover: #d4a85a;
+  --theme-checklist-checkbox-border: #f5e6c8;
+  --theme-checklist-button-border: #d4a85a;
+  --theme-checklist-button-text: #d4a85a;
+  --theme-checklist-button-hover-bg: rgba(212, 168, 90, 0.2);
+  --theme-checklist-button-hover-border: rgba(212, 168, 90, 0.8);
+
+  --theme-home-button-secondary-border: #8b7355;
+  --theme-home-button-secondary-border-hover: #3d3220;
+
+  --theme-attachment-bg: #242219;
+  --theme-attachment-error-bg: rgba(180, 80, 40, 0.4);
+  --theme-attachment-success-bg: #242219;
+  --theme-attachment-text: #f5e6c8;
+  --theme-attachment-text-secondary: rgba(245, 230, 200, 0.8);
+  --theme-attachment-icon: #f5e6c8;
+  --theme-attachment-icon-spinner: #d4a85a;
+  --theme-attachment-icon-spinner-bg: #2d2a22;
+
+  --theme-button-text: #a89070;
+  --theme-button-code-hover-text: #e8c078;
+  --theme-button-code-hover-bg: #3d3220;
+  --theme-button-disable-hover-text: #fec84b;
+  --theme-button-disable-hover-bg: #3a3128;
+  --theme-button-delete-hover-text: #f97066;
+  --theme-button-delete-hover-bg: #37282b;
+}
+
+/* 见青山主题 - 墨绿色为主 */
+[data-theme="qingshan"] {
+  --theme-loader: #4a9f7e;
+  --theme-bg-primary: #0f1a16;
+  --theme-bg-secondary: #162420;
+  --theme-bg-sidebar: #0f1a16;
+  --theme-bg-container: #0f1a16;
+  --theme-bg-chat: #162420;
+  --theme-bg-chat-input: #1d2d28;
+  --theme-text-primary: #d8f0e3;
+  --theme-text-secondary: rgba(216, 240, 227, 0.7);
+  --theme-placeholder: #5a8070;
+  --theme-sidebar-item-default: rgba(74, 159, 126, 0.1);
+  --theme-sidebar-item-selected: rgba(74, 159, 126, 0.3);
+  --theme-sidebar-item-hover: #243832;
+  --theme-sidebar-subitem-default: rgba(74, 159, 126, 0.05);
+  --theme-sidebar-subitem-selected: rgba(74, 159, 126, 0.1);
+  --theme-sidebar-thread-selected: rgba(74, 159, 126, 0.08);
+  --theme-popup-menu-bg: #0f1a16;
+
+  --theme-sidebar-subitem-hover: rgba(74, 159, 126, 0.08);
+  --theme-sidebar-border: rgba(74, 159, 126, 0.2);
+  --theme-sidebar-item-workspace-active: #6bc4a0;
+  --theme-sidebar-item-workspace-inactive: #7a9f8e;
+
+  --theme-sidebar-footer-icon: rgba(74, 159, 126, 0.15);
+  --theme-sidebar-footer-icon-fill: #6bc4a0;
+  --theme-sidebar-footer-icon-hover: rgba(74, 159, 126, 0.25);
+
+  --theme-chat-input-border: #3a5a4d;
+  --theme-action-menu-bg: #1d2d28;
+  --theme-action-menu-item-hover: rgba(74, 159, 126, 0.15);
+  --theme-settings-input-bg: #0f1a16;
+  --theme-settings-input-placeholder: rgba(216, 240, 227, 0.5);
+  --theme-settings-input-active: rgba(74, 159, 126, 0.3);
+  --theme-settings-input-text: #d8f0e3;
+  --theme-modal-border: #3a5a4d;
+
+  --theme-button-primary: #4a9f7e;
+  --theme-button-primary-hover: #2a4a3e;
+
+  --theme-button-cta: #6bc4a0;
+
+  --theme-file-row-even: #0f1a16;
+  --theme-file-row-odd: #162420;
+  --theme-file-row-selected-even: rgba(74, 159, 126, 0.2);
+  --theme-file-row-selected-odd: rgba(74, 159, 126, 0.15);
+  --theme-file-picker-hover: rgba(74, 159, 126, 0.2);
+
+  --theme-home-text: #d8f0e3;
+  --theme-home-text-secondary: #7a9f8e;
+  --theme-home-bg-card: #162420;
+  --theme-home-bg-button: #1d2d28;
+  --theme-home-border: rgba(74, 159, 126, 0.2);
+  --theme-home-button-primary: #4a9f7e;
+  --theme-home-button-primary-hover: rgba(74, 159, 126, 0.85);
+  --theme-home-button-secondary: #1d2d28;
+  --theme-home-button-secondary-hover: rgba(74, 159, 126, 0.15);
+  --theme-home-button-secondary-text: #d8f0e3;
+  --theme-home-button-secondary-hover-text: #6bc4a0;
+  --theme-home-update-card-bg: #162420;
+  --theme-home-update-card-hover: #1d2d28;
+  --theme-home-update-source: #6bc4a0;
+
+  --theme-checklist-item-bg: #1d3a30;
+  --theme-checklist-item-bg-hover: #254a3d;
+  --theme-checklist-item-text: #8fd4b5;
+  --theme-checklist-item-completed-bg: #2a4a3a;
+  --theme-checklist-item-completed-text: #a6f4c5;
+  --theme-checklist-checkbox-fill: #a6f4c5;
+  --theme-checklist-checkbox-text: #1d3a30;
+  --theme-checklist-item-hover: #6bc4a0;
+  --theme-checklist-checkbox-border: #d8f0e3;
+  --theme-checklist-button-border: #4a9f7e;
+  --theme-checklist-button-text: #4a9f7e;
+  --theme-checklist-button-hover-bg: rgba(74, 159, 126, 0.2);
+  --theme-checklist-button-hover-border: rgba(74, 159, 126, 0.8);
+
+  --theme-home-button-secondary-border: #5a8070;
+  --theme-home-button-secondary-border-hover: #243832;
+
+  --theme-attachment-bg: #162420;
+  --theme-attachment-error-bg: rgba(180, 60, 60, 0.4);
+  --theme-attachment-success-bg: #162420;
+  --theme-attachment-text: #d8f0e3;
+  --theme-attachment-text-secondary: rgba(216, 240, 227, 0.8);
+  --theme-attachment-icon: #d8f0e3;
+  --theme-attachment-icon-spinner: #6bc4a0;
+  --theme-attachment-icon-spinner-bg: #1d2d28;
+
+  --theme-button-text: #7a9f8e;
+  --theme-button-code-hover-text: #6bc4a0;
+  --theme-button-code-hover-bg: #1d3a30;
+  --theme-button-disable-hover-text: #fec84b;
+  --theme-button-disable-hover-bg: #3a3128;
+  --theme-button-delete-hover-text: #f97066;
+  --theme-button-delete-hover-bg: #37282b;
+}
+
+/* 水含烟主题 - 白色基调 */
+[data-theme="shuihanyan"] {
+  --theme-loader: #6b8fa8;
+  --theme-bg-primary: #f8fafc;
+  --theme-bg-secondary: #ffffff;
+  --theme-bg-sidebar: #f1f5f9;
+  --theme-bg-container: #f8fafc;
+  --theme-bg-chat: #ffffff;
+  --theme-bg-chat-input: #e8eef4;
+  --theme-text-primary: #1e3a5f;
+  --theme-text-secondary: #64748b;
+  --theme-placeholder: #94a3b8;
+  --theme-sidebar-item-default: #ffffff;
+  --theme-sidebar-item-selected: #e0f2fe;
+  --theme-sidebar-item-hover: #dbe8f4;
+  --theme-sidebar-subitem-default: transparent;
+  --theme-sidebar-subitem-selected: #e0f2fe;
+  --theme-sidebar-thread-selected: #ffffff;
+  --theme-popup-menu-bg: #e0f2fe;
+
+  --theme-sidebar-subitem-hover: #e8f4fc;
+  --theme-sidebar-border: #cbd5e1;
+  --theme-sidebar-item-workspace-active: #1e3a5f;
+  --theme-sidebar-item-workspace-inactive: #64748b;
+
+  --theme-sidebar-footer-icon: #ffffff;
+  --theme-sidebar-footer-icon-fill: #64748b;
+  --theme-sidebar-footer-icon-hover: #dbe8f4;
+
+  --theme-sidebar-item-text-inactive: #64748b;
+  --theme-sidebar-item-text-active: #1e3a5f;
+
+  --theme-chat-input-border: #cbd5e1;
+  --theme-action-menu-bg: #e8eef4;
+  --theme-action-menu-item-hover: rgba(107, 143, 168, 0.15);
+  --theme-settings-input-bg: #f1f5f9;
+  --theme-settings-input-placeholder: rgba(30, 58, 95, 0.5);
+  --theme-settings-input-active: rgba(107, 143, 168, 0.3);
+  --theme-settings-input-text: #1e3a5f;
+  --theme-modal-border: #cbd5e1;
+
+  --theme-button-primary: #6b8fa8;
+  --theme-button-primary-hover: #dbe8f4;
+
+  --theme-button-cta: #7ba3bd;
+
+  --theme-file-row-even: #f8fafc;
+  --theme-file-row-odd: #f1f5f9;
+  --theme-file-row-selected-even: #bae6fd;
+  --theme-file-row-selected-odd: #bae6fd;
+  --theme-file-picker-hover: #e0f2fe;
+
+  --theme-home-text: #1e3a5f;
+  --theme-home-text-secondary: #64748b;
+  --theme-home-bg-card: #f1f5f9;
+  --theme-home-bg-button: #e8eef4;
+  --theme-home-border: rgba(107, 143, 168, 0.2);
+  --theme-home-button-primary: #6b8fa8;
+  --theme-home-button-primary-hover: rgba(107, 143, 168, 0.85);
+  --theme-home-button-secondary: #e0f2fe;
+  --theme-home-button-secondary-hover: #bae6fd;
+  --theme-home-button-secondary-text: #1e3a5f;
+  --theme-home-button-secondary-hover-text: #1e3a5f;
+  --theme-home-update-card-bg: #f1f5f9;
+  --theme-home-update-card-hover: #e8eef4;
+  --theme-home-update-source: #4a7c99;
+
+  --theme-checklist-item-bg: #dbeafe;
+  --theme-checklist-item-bg-hover: #bae6fd;
+  --theme-checklist-item-text: #1e3a5f;
+  --theme-checklist-item-completed-bg: #dcfce7;
+  --theme-checklist-item-completed-text: #166534;
+  --theme-checklist-checkbox-fill: #6ee7b7;
+  --theme-checklist-checkbox-text: #ffffff;
+  --theme-checklist-item-hover: #6b8fa8;
+  --theme-checklist-checkbox-border: #64748b;
+  --theme-checklist-button-border: #6b8fa8;
+  --theme-checklist-button-text: #6b8fa8;
+  --theme-checklist-button-hover-bg: rgba(107, 143, 168, 0.15);
+  --theme-checklist-button-hover-border: rgba(107, 143, 168, 0.8);
+
+  --theme-home-button-secondary-border: #94a3b8;
+  --theme-home-button-secondary-border-hover: #64748b;
+
+  --theme-attachment-bg: #f1f5f9;
+  --theme-attachment-error-bg: rgba(220, 38, 38, 0.2);
+  --theme-attachment-success-bg: #e8eef4;
+  --theme-attachment-text: #1e3a5f;
+  --theme-attachment-text-secondary: rgba(30, 58, 95, 0.8);
+  --theme-attachment-icon: #ffffff;
+  --theme-attachment-icon-spinner: #6b8fa8;
+  --theme-attachment-icon-spinner-bg: #ffffff;
+
+  --theme-button-text: #94a3b8;
+  --theme-button-code-hover-text: #4a7c99;
+  --theme-button-code-hover-bg: #e0f2fe;
+  --theme-button-disable-hover-text: #854708;
+  --theme-button-disable-hover-bg: #fef7e6;
+  --theme-button-delete-hover-text: #b42318;
+  --theme-button-delete-hover-bg: #fee4e2;
+}
+
+[data-theme="light"] .text-white,
+[data-theme="shuihanyan"] .text-white {
   color: var(--theme-text-primary);
 }
 
 [data-theme="light"] .text-description,
-[data-theme="light"] .text-white\/60 {
+[data-theme="light"] .text-white\/60,
+[data-theme="shuihanyan"] .text-description,
+[data-theme="shuihanyan"] .text-white\/60 {
   color: var(--theme-text-secondary);
 }
 
-[data-theme="light"] .bg-theme-bg-secondary {
+[data-theme="light"] .bg-theme-bg-secondary,
+[data-theme="shuihanyan"] .bg-theme-bg-secondary {
   border: 1px solid var(--theme-sidebar-border);
 }
 
-[data-theme="light"] .border-white\/10 {
+[data-theme="light"] .border-white\/10,
+[data-theme="shuihanyan"] .border-white\/10 {
   border-color: var(--theme-sidebar-border);
 }
 

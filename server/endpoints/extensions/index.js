@@ -192,6 +192,52 @@ function extensionEndpoints(app) {
       }
     }
   );
+
+  // S3 Storage Connector
+  app.post(
+    "/ext/s3-storage",
+    [validatedRequest, flexUserRoleValid([ROLES.admin, ROLES.manager])],
+    async (request, response) => {
+      try {
+        const responseFromProcessor =
+          await new CollectorApi().forwardExtensionRequest({
+            endpoint: "/ext/s3-storage",
+            method: "POST",
+            body: request.body,
+          });
+        await Telemetry.sendTelemetry("extension_invoked", {
+          type: "s3_storage",
+        });
+        response.status(200).json(responseFromProcessor);
+      } catch (e) {
+        console.error(e);
+        response.sendStatus(500).end();
+      }
+    }
+  );
+
+  // Tencent COS Connector
+  app.post(
+    "/ext/tencent-cos",
+    [validatedRequest, flexUserRoleValid([ROLES.admin, ROLES.manager])],
+    async (request, response) => {
+      try {
+        const responseFromProcessor =
+          await new CollectorApi().forwardExtensionRequest({
+            endpoint: "/ext/tencent-cos",
+            method: "POST",
+            body: request.body,
+          });
+        await Telemetry.sendTelemetry("extension_invoked", {
+          type: "tencent_cos",
+        });
+        response.status(200).json(responseFromProcessor);
+      } catch (e) {
+        console.error(e);
+        response.sendStatus(500).end();
+      }
+    }
+  );
 }
 
 module.exports = { extensionEndpoints };

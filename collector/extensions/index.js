@@ -222,6 +222,48 @@ function extensions(app) {
       return;
     }
   );
+
+  // S3 Storage Connector
+  app.post(
+    "/ext/s3-storage",
+    [verifyPayloadIntegrity, setDataSigner],
+    async function (request, response) {
+      try {
+        const { loadS3Storage } = require("../utils/extensions/S3Storage");
+        const result = await loadS3Storage(reqBody(request), response);
+        response.status(200).json(result);
+      } catch (e) {
+        console.error(e);
+        response.status(400).json({
+          success: false,
+          reason: e.message,
+          data: null,
+        });
+      }
+      return;
+    }
+  );
+
+  // Tencent COS Connector
+  app.post(
+    "/ext/tencent-cos",
+    [verifyPayloadIntegrity, setDataSigner],
+    async function (request, response) {
+      try {
+        const { loadTencentCOS } = require("../utils/extensions/TencentCOS");
+        const result = await loadTencentCOS(reqBody(request), response);
+        response.status(200).json(result);
+      } catch (e) {
+        console.error(e);
+        response.status(400).json({
+          success: false,
+          reason: e.message,
+          data: null,
+        });
+      }
+      return;
+    }
+  );
 }
 
 module.exports = extensions;
