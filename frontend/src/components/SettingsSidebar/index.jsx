@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import paths from "@/utils/paths";
-import useLogo from "@/hooks/useLogo";
+import TextLogo, { TextLogoCompact } from "@/components/TextLogo";
 import {
   House,
   List,
@@ -26,7 +26,6 @@ import useAppVersion from "@/hooks/useAppVersion";
 
 export default function SettingsSidebar() {
   const { t } = useTranslation();
-  const { logo } = useLogo();
   const { user } = useUser();
   const sidebarRef = useRef(null);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -56,12 +55,7 @@ export default function SettingsSidebar() {
             <List className="h-6 w-6" />
           </button>
           <div className="flex items-center justify-center flex-grow">
-            <img
-              src={logo}
-              alt="Logo"
-              className="block mx-auto h-6 w-auto"
-              style={{ maxHeight: "40px", objectFit: "contain" }}
-            />
+            <TextLogoCompact />
           </div>
           <div className="w-12"></div>
         </div>
@@ -87,12 +81,7 @@ export default function SettingsSidebar() {
               {/* Header Information */}
               <div className="flex w-full items-center justify-between gap-x-4">
                 <div className="flex shrink-1 w-fit items-center justify-start">
-                  <img
-                    src={logo}
-                    alt="Logo"
-                    className="rounded w-full max-h-[40px]"
-                    style={{ objectFit: "contain" }}
-                  />
+                  <TextLogo />
                 </div>
                 <div className="flex gap-x-2 items-center text-slate-500 shrink-0">
                   <a
@@ -137,17 +126,9 @@ export default function SettingsSidebar() {
   return (
     <>
       <div>
-        <Link
-          to={paths.home()}
-          className="flex shrink-0 max-w-[55%] items-center justify-start mx-[38px] my-[18px]"
-        >
-          <img
-            src={logo}
-            alt="Logo"
-            className="rounded max-h-[24px]"
-            style={{ objectFit: "contain" }}
-          />
-        </Link>
+        <div className="flex shrink-0 max-w-[55%] items-center justify-start mx-[38px] my-[18px]">
+          <TextLogo />
+        </div>
         <div
           ref={sidebarRef}
           className="transition-all duration-500 relative m-[16px] rounded-[16px] bg-theme-bg-sidebar border-[2px] border-theme-sidebar-border light:border-none min-w-[250px] p-[10px] h-[calc(100%-76px)]"
@@ -339,6 +320,12 @@ const SidebarOptions = ({ user = null, t }) => (
             {
               btnText: t("settings.branding"),
               href: paths.settings.branding(),
+              flex: true,
+              roles: ["admin", "manager"],
+            },
+            {
+              btnText: "主题配色",
+              href: paths.settings.themeColors(),
               flex: true,
               roles: ["admin", "manager"],
             },
