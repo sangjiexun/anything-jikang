@@ -141,9 +141,9 @@ const TRANSLATIONS = {
           action: "聊天",
         },
         embed_document: {
-          title: "嵌入文档",
+          title: "知识库管理",
           description: "添加你的第一个文档到工作区",
-          action: "嵌入",
+          action: "管理",
         },
         setup_system_prompt: {
           title: "设置系统提示",
@@ -165,7 +165,7 @@ const TRANSLATIONS = {
     quickLinks: {
       title: "快捷链接",
       sendChat: "发送聊天",
-      embedDocument: "嵌入文档",
+      embedDocument: "知识库管理",
       createWorkspace: "创建工作区",
     },
     exploreMore: {
@@ -721,7 +721,7 @@ const TRANSLATIONS = {
       bypass_ssl_explained: null,
     },
     manage: {
-      documents: "文档",
+      documents: "知识库管理",
       "data-connectors": "数据连接器",
       "desktop-only":
         "这些设置只能在桌面设备上编辑。请使用桌面访问此页面以继续操作。",
