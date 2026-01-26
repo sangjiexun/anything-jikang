@@ -24,6 +24,7 @@ import ManageWorkspace, {
   useManageWorkspaceModal,
 } from "@/components/Modals/ManageWorkspace";
 import WritingWorkspace from "./panels/WritingWorkspace";
+import VideoWorkspace from "./panels/VideoWorkspace";
 
 // AI工具链配置
 const AI_TOOLS = [
@@ -143,14 +144,14 @@ export default function RightToolbar() {
     if (toolId === "knowledge-base") {
       showManageWorkspace();
     }
-    // 智能图文工作台 - 需要更宽的面板
-    if (toolId === "image-text-studio") {
+    // 智能图文工作台 / 视频工作台 - 需要更宽的面板
+    if (toolId === "image-text-studio" || toolId === "video-studio") {
       setIsExpanded(true);
     }
   };
 
   // 判断是否显示全屏工作台面板
-  const showFullPanel = selectedTool === "image-text-studio";
+  const showFullPanel = selectedTool === "image-text-studio" || selectedTool === "video-studio";
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -169,13 +170,19 @@ export default function RightToolbar() {
           style={{ width: showFullPanel ? "480px" : "320px" }}
           className="h-[calc(100%-32px)] my-[16px] bg-theme-bg-sidebar border-[2px] border-theme-sidebar-border light:border-none rounded-[16px] overflow-hidden flex flex-col"
         >
-          {/* 智能图文工作台 - 全功能面板 */}
-          {showFullPanel ? (
+          {/* 工作台面板 */}
+          {selectedTool === "image-text-studio" ? (
             <WritingWorkspace
               initialContent={writingContent}
               onClose={() => {
                 setSelectedTool(null);
                 setWritingContent("");
+              }}
+            />
+          ) : selectedTool === "video-studio" ? (
+            <VideoWorkspace
+              onClose={() => {
+                setSelectedTool(null);
               }}
             />
           ) : (

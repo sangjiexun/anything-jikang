@@ -2,6 +2,7 @@ import { defineConfig } from "vite"
 import { fileURLToPath, URL } from "url"
 import postcss from "./postcss.config.js"
 import react from "@vitejs/plugin-react"
+import vue from "@vitejs/plugin-vue"
 import dns from "dns"
 import { visualizer } from "rollup-plugin-visualizer"
 
@@ -28,6 +29,8 @@ export default defineConfig({
     postcss
   },
   plugins: [
+    // Vue 插件需要在 React 之前加载
+    vue(),
     react(),
     visualizer({
       template: "treemap", // or sunburst
