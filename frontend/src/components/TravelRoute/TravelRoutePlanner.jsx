@@ -47,10 +47,12 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
         }
 
         // 加载高德地图 JS API v1.4.15（支持Driving路线规划）
+        // 注意：使用v1.4.15避免WebGL问题，如果需要3D效果可以使用v2.0
         const amapScript = document.createElement("script");
         amapScript.src = `https://webapi.amap.com/maps?v=1.4.15&key=${apiKey}&plugin=AMap.Driving`;
         amapScript.async = true;
         amapScript.defer = true;
+        amapScript.crossOrigin = "anonymous";
         
         amapScript.onload = () => {
           if (window.AMap) {
@@ -76,15 +78,27 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
         const map = new window.AMap.Map(mapRef.current, {
           center: center || [116.397428, 39.90923],
           zoom: zoom,
-          viewMode: "3D", // 3D视角
-          pitch: 60, // 俯仰角
-          rotation: -15, // 旋转角度
+          viewMode: "2D", // 使用2D模式避免WebGL问题
           mapStyle: "amap://styles/dark", // 深色主题（黑客风格）
           showLabel: false,
           resizeEnable: true,
         });
 
         amapInstanceRef.current = map;
+
+        // 确保地图容器大小正确（延迟调用resize）
+        map.on("complete", () => {
+          // 延迟调用resize，确保地图完全加载
+          setTimeout(() => {
+            try {
+              if (map && typeof map.resize === 'function') {
+                map.resize();
+              }
+            } catch (e) {
+              console.warn("地图resize失败:", e);
+            }
+          }, 200);
+        });
 
         // 添加黑客风格HUD全息效果（蓝色和黄色基调）
         map.on("complete", () => {
@@ -150,16 +164,26 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
           
           if (validBounds.length > 0) {
             try {
-              // 使用高德地图的setFitView方法
-              const markers = [];
+              // 使用高德地图的setBounds方法调整视野
+              const bounds = new window.AMap.Bounds();
               validBounds.forEach((coord) => {
                 if (coord && coord.length === 2 && !isNaN(coord[0]) && !isNaN(coord[1])) {
-                  markers.push(new window.AMap.LngLat(coord[0], coord[1]));
+                  bounds.extend(coord);
                 }
               });
               
-              if (markers.length > 0) {
-                map.setFitView(null, false, [50, 50, 50, 50], 16);
+              if (validBounds.length > 0) {
+                map.setBounds(bounds);
+                // 延迟调用resize确保正确显示
+                setTimeout(() => {
+                  try {
+                    if (map && typeof map.resize === 'function') {
+                      map.resize();
+                    }
+                  } catch (e) {
+                    // 忽略resize错误
+                  }
+                }, 100);
               }
             } catch (error) {
               console.warn("调整地图视野失败:", error);
