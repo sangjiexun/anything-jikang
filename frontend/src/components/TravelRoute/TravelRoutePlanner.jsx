@@ -150,20 +150,16 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
           
           if (validBounds.length > 0) {
             try {
-              // 安全地创建bounds
-              const firstCoord = validBounds[0];
-              if (firstCoord && firstCoord.length === 2 && !isNaN(firstCoord[0]) && !isNaN(firstCoord[1])) {
-                const bounds = new window.maplibregl.LngLatBounds(firstCoord, firstCoord);
-                validBounds.forEach((coord) => {
-                  if (coord && coord.length === 2 && !isNaN(coord[0]) && !isNaN(coord[1])) {
-                    bounds.extend(coord);
-                  }
-                });
-                
-                map.fitBounds(bounds, {
-                  padding: 50,
-                  duration: 1000
-                });
+              // 使用高德地图的setFitView方法
+              const markers = [];
+              validBounds.forEach((coord) => {
+                if (coord && coord.length === 2 && !isNaN(coord[0]) && !isNaN(coord[1])) {
+                  markers.push(new window.AMap.LngLat(coord[0], coord[1]));
+                }
+              });
+              
+              if (markers.length > 0) {
+                map.setFitView(null, false, [50, 50, 50, 50], 16);
               }
             } catch (error) {
               console.warn("调整地图视野失败:", error);
@@ -514,19 +510,19 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
 
           marker.setMap(map);
 
-          // 鼠标悬停显示卡片
-          el.addEventListener("mouseenter", () => {
+          // 鼠标悬停显示卡片（高德地图事件）
+          marker.on("mouseover", () => {
             setHoveredPoi(poi);
             showHoverCard(map, poi, validPosition);
           });
 
-          el.addEventListener("mouseleave", () => {
+          marker.on("mouseout", () => {
             setHoveredPoi(null);
             hideHoverCard();
           });
 
           // 点击事件
-          el.addEventListener("click", () => {
+          marker.on("click", () => {
             if (onPoiClick) {
               onPoiClick({ id: index, name: poi.name, description: poi.description });
             }
