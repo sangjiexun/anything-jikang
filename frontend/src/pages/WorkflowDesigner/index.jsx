@@ -488,32 +488,63 @@ export default function WorkflowDesigner() {
           }
           addLog("info", `调用 ${config.title} API...`, node.id);
           
+          // 确保用户消息是字符串
+          let userMessage = "你好";
+          if (inputData) {
+            if (typeof inputData === "string") {
+              userMessage = inputData;
+            } else if (typeof inputData === "object") {
+              userMessage = JSON.stringify(inputData);
+            } else {
+              userMessage = String(inputData);
+            }
+          }
+          
+          const requestBody = {
+            model: llmConfig.model,
+            messages: [
+              { role: "system", content: node.config?.systemPrompt || "你是一个有帮助的AI助手" },
+              { role: "user", content: userMessage },
+            ],
+            temperature: node.config?.temperature || llmConfig.temperature || 0.7,
+            max_tokens: node.config?.maxTokens || llmConfig.maxTokens || 2048,
+          };
+          
+          addLog("info", `请求模型: ${requestBody.model}`, node.id);
+          
           const llmResponse = await fetch(`${llmConfig.endpoint}/v1/chat/completions`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${llmConfig.apiKey}`,
             },
-            body: JSON.stringify({
-              model: llmConfig.model,
-              messages: [
-                { role: "system", content: node.config?.systemPrompt || "你是一个有帮助的AI助手" },
-                { role: "user", content: inputData || "你好" },
-              ],
-              temperature: node.config?.temperature || llmConfig.temperature,
-              max_tokens: node.config?.maxTokens || llmConfig.maxTokens,
-            }),
+            body: JSON.stringify(requestBody),
           });
 
           if (!llmResponse.ok) {
-            if (llmResponse.status === 402) {
-              throw new Error("API账户余额不足");
+            let errorMessage = `API请求失败: ${llmResponse.status}`;
+            try {
+              const errorData = await llmResponse.json();
+              errorMessage = errorData.error?.message || errorData.message || errorMessage;
+            } catch (e) {
+              // 无法解析错误响应
             }
-            throw new Error(`API请求失败: ${llmResponse.status}`);
+            
+            if (llmResponse.status === 400) {
+              throw new Error(`请求格式错误: ${errorMessage}`);
+            } else if (llmResponse.status === 401) {
+              throw new Error("API Key无效或已过期");
+            } else if (llmResponse.status === 402) {
+              throw new Error("API账户余额不足");
+            } else if (llmResponse.status === 429) {
+              throw new Error("请求过于频繁，请稍后重试");
+            } else {
+              throw new Error(errorMessage);
+            }
           }
 
           const llmData = await llmResponse.json();
-          result = llmData.choices[0].message.content;
+          result = llmData.choices?.[0]?.message?.content || "无响应内容";
           break;
 
         case "trigger-manual":
