@@ -236,15 +236,26 @@ export default function WorkflowDesigner() {
     [saveHistory]
   );
 
-  // 处理画布拖拽
+  // 处理画布拖拽 (中键或Alt+左键)
   const handleCanvasMouseDown = (e) => {
+    // 中键按下 - 开始拖拽画布
+    if (e.button === 1) {
+      e.preventDefault();
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      return;
+    }
+    
+    // Alt + 左键 - 也可以拖拽画布
+    if (e.button === 0 && e.altKey) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      return;
+    }
+    
+    // 左键点击空白区域 - 取消选中
     if (e.target === canvasRef.current || e.target === svgRef.current) {
-      if (e.button === 1 || (e.button === 0 && e.altKey)) {
-        setIsPanning(true);
-        setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-      } else {
-        setSelectedNode(null);
-      }
+      setSelectedNode(null);
     }
   };
 
@@ -297,13 +308,28 @@ export default function WorkflowDesigner() {
     }
   };
 
-  // 处理滚轮缩放
+  // 处理滚轮缩放 - 直接滚轮缩放，以鼠标位置为中心
   const handleWheel = (e) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      setZoom((prev) => Math.min(Math.max(prev * delta, 0.1), 3));
-    }
+    e.preventDefault();
+    
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    // 鼠标在画布中的位置
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // 计算缩放比例
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.min(Math.max(zoom * delta, 0.2), 3);
+    
+    // 以鼠标位置为中心缩放
+    const zoomRatio = newZoom / zoom;
+    const newPanX = mouseX - (mouseX - pan.x) * zoomRatio;
+    const newPanY = mouseY - (mouseY - pan.y) * zoomRatio;
+    
+    setZoom(newZoom);
+    setPan({ x: newPanX, y: newPanY });
   };
 
   // 节点拖拽开始
@@ -323,12 +349,13 @@ export default function WorkflowDesigner() {
     });
   };
 
-  // 连接点点击
-  const handleConnectionPointClick = (e, nodeId, isOutput) => {
+  // 连接点 mouseDown - 开始连接
+  const handleConnectionPointMouseDown = (e, nodeId, isOutput) => {
     e.stopPropagation();
+    e.preventDefault();
 
-    if (!isConnecting && isOutput) {
-      // 开始连接
+    if (isOutput) {
+      // 从输出点开始连接
       const node = (workflow.nodes || []).find((n) => n.id === nodeId);
       if (!node) return;
 
@@ -338,8 +365,15 @@ export default function WorkflowDesigner() {
         x: node.x + 180, // 节点宽度
         y: node.y + 40, // 节点中心高度
       });
-    } else if (isConnecting && !isOutput) {
-      // 完成连接
+    }
+  };
+
+  // 连接点 mouseUp - 完成连接
+  const handleConnectionPointMouseUp = (e, nodeId, isOutput) => {
+    e.stopPropagation();
+
+    if (isConnecting && !isOutput && connectionStart) {
+      // 在输入点释放 - 完成连接
       createConnection(connectionStart.nodeId, nodeId);
       setIsConnecting(false);
       setConnectionStart(null);
@@ -654,6 +688,8 @@ export default function WorkflowDesigner() {
             onWheel={handleWheel}
             onDrop={handleCanvasDrop}
             onDragOver={(e) => e.preventDefault()}
+            onContextMenu={(e) => e.preventDefault()}
+            onAuxClick={(e) => e.button === 1 && e.preventDefault()}
           >
             {/* SVG 连接层 */}
             <svg
@@ -756,21 +792,25 @@ export default function WorkflowDesigner() {
                       </p>
                     </div>
 
-                    {/* 输入连接点 */}
+                    {/* 输入连接点 (蓝色) */}
                     {config.inputs.length > 0 && (
                       <div
-                        className="absolute -left-3 top-1/2 w-6 h-6 bg-blue-500 border-2 border-white rounded-full transform -translate-y-1/2 cursor-crosshair hover:scale-125 transition-transform flex items-center justify-center"
-                        onClick={(e) => handleConnectionPointClick(e, node.id, false)}
+                        className={`absolute -left-3 top-1/2 w-6 h-6 bg-blue-500 border-2 border-white rounded-full transform -translate-y-1/2 cursor-crosshair hover:scale-125 transition-transform flex items-center justify-center z-10 ${
+                          isConnecting ? "animate-pulse ring-2 ring-blue-400" : ""
+                        }`}
+                        onMouseDown={(e) => handleConnectionPointMouseDown(e, node.id, false)}
+                        onMouseUp={(e) => handleConnectionPointMouseUp(e, node.id, false)}
                       >
                         <div className="w-2 h-2 bg-white rounded-full" />
                       </div>
                     )}
 
-                    {/* 输出连接点 */}
+                    {/* 输出连接点 (绿色) */}
                     {config.outputs.length > 0 && (
                       <div
-                        className="absolute -right-3 top-1/2 w-6 h-6 bg-green-500 border-2 border-white rounded-full transform -translate-y-1/2 cursor-crosshair hover:scale-125 transition-transform flex items-center justify-center"
-                        onClick={(e) => handleConnectionPointClick(e, node.id, true)}
+                        className="absolute -right-3 top-1/2 w-6 h-6 bg-green-500 border-2 border-white rounded-full transform -translate-y-1/2 cursor-crosshair hover:scale-125 transition-transform flex items-center justify-center z-10"
+                        onMouseDown={(e) => handleConnectionPointMouseDown(e, node.id, true)}
+                        onMouseUp={(e) => handleConnectionPointMouseUp(e, node.id, true)}
                       >
                         <div className="w-2 h-2 bg-white rounded-full" />
                       </div>
