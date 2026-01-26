@@ -585,7 +585,15 @@ export default function WorkflowDesigner() {
       });
 
       if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status}`);
+        if (response.status === 402) {
+          throw new Error("API账户余额不足，请充值后重试");
+        } else if (response.status === 401) {
+          throw new Error("API Key无效或已过期，请检查配置");
+        } else if (response.status === 429) {
+          throw new Error("API请求过于频繁，请稍后重试");
+        } else {
+          throw new Error(`API请求失败: ${response.status}`);
+        }
       }
 
       const data = await response.json();
