@@ -490,15 +490,17 @@ export default function FlashcardViewer({ flashcards, onClose }) {
                         <>
                           <p className="font-medium">{currentCard.reference.document}</p>
                           {currentCard.reference.page && (
-                        <p className="text-xs mt-1">页码: {currentCard.reference.page}</p>
-                      )}
-                      {currentCard.reference.section && (
-                        <p className="text-xs mt-1">章节: {currentCard.reference.section}</p>
-                      )}
-                      {currentCard.reference.excerpt && (
-                        <p className="text-xs mt-2 italic border-l-2 border-blue-500 pl-2">
-                          {currentCard.reference.excerpt}
-                        </p>
+                            <p className="text-xs mt-1">页码: {currentCard.reference.page}</p>
+                          )}
+                          {currentCard.reference.section && (
+                            <p className="text-xs mt-1">章节: {currentCard.reference.section}</p>
+                          )}
+                          {currentCard.reference.excerpt && (
+                            <p className="text-xs mt-2 italic border-l-2 border-blue-500 pl-2">
+                              {currentCard.reference.excerpt}
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
