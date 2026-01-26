@@ -76,6 +76,13 @@ export default function WorkflowDesigner() {
   );
   const [searchQuery, setSearchQuery] = useState("");
 
+  // 执行状态
+  const [executingNodeId, setExecutingNodeId] = useState(null);
+  const [executionLogs, setExecutionLogs] = useState([]);
+  const [executionResult, setExecutionResult] = useState(null);
+  const [showResultPanel, setShowResultPanel] = useState(false);
+  const [nodeResults, setNodeResults] = useState({});
+
   // 画布状态
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -440,6 +447,191 @@ export default function WorkflowDesigner() {
     }
   };
 
+  // 添加执行日志
+  const addLog = (type, message, nodeId = null) => {
+    const log = {
+      id: Date.now(),
+      type, // 'info' | 'success' | 'error' | 'warning'
+      message,
+      nodeId,
+      timestamp: new Date().toLocaleTimeString(),
+    };
+    setExecutionLogs((prev) => [...prev, log]);
+  };
+
+  // 执行单个节点
+  const executeNode = async (node, inputData) => {
+    const config = NODE_TYPES[node.type];
+    if (!config) {
+      throw new Error(`未知的节点类型: ${node.type}`);
+    }
+
+    addLog("info", `开始执行节点: ${config.title}`, node.id);
+    setExecutingNodeId(node.id);
+
+    // 模拟不同类型节点的执行
+    let result = null;
+    const startTime = Date.now();
+
+    try {
+      switch (node.type) {
+        case "llm-deepseek":
+        case "llm-gemini":
+        case "llm-qwen":
+          // LLM 节点 - 调用 API
+          if (!llmConfig.apiKey) {
+            throw new Error("请先配置大模型 API Key");
+          }
+          addLog("info", `调用 ${config.title} API...`, node.id);
+          
+          const llmResponse = await fetch(`${llmConfig.endpoint}/v1/chat/completions`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${llmConfig.apiKey}`,
+            },
+            body: JSON.stringify({
+              model: llmConfig.model,
+              messages: [
+                { role: "system", content: node.config?.systemPrompt || "你是一个有帮助的AI助手" },
+                { role: "user", content: inputData || "你好" },
+              ],
+              temperature: node.config?.temperature || llmConfig.temperature,
+              max_tokens: node.config?.maxTokens || llmConfig.maxTokens,
+            }),
+          });
+
+          if (!llmResponse.ok) {
+            if (llmResponse.status === 402) {
+              throw new Error("API账户余额不足");
+            }
+            throw new Error(`API请求失败: ${llmResponse.status}`);
+          }
+
+          const llmData = await llmResponse.json();
+          result = llmData.choices[0].message.content;
+          break;
+
+        case "trigger-manual":
+          result = { triggered: true, timestamp: new Date().toISOString() };
+          break;
+
+        case "trigger-schedule":
+          result = { scheduled: true, cron: node.config?.cron || "0 * * * *" };
+          break;
+
+        case "code-js":
+          // JavaScript 代码执行
+          addLog("info", "执行 JavaScript 代码...", node.id);
+          try {
+            const code = node.config?.code || "return input;";
+            const fn = new Function("input", code);
+            result = fn(inputData);
+          } catch (e) {
+            throw new Error(`代码执行错误: ${e.message}`);
+          }
+          break;
+
+        case "http-request":
+          // HTTP 请求
+          addLog("info", `发送 HTTP ${node.config?.method || "GET"} 请求...`, node.id);
+          const httpResponse = await fetch(node.config?.url || "https://httpbin.org/get", {
+            method: node.config?.method || "GET",
+            headers: node.config?.headers ? JSON.parse(node.config.headers) : {},
+          });
+          result = await httpResponse.json();
+          break;
+
+        case "condition":
+          // 条件判断
+          const condition = node.config?.condition || "true";
+          try {
+            const condFn = new Function("input", `return ${condition};`);
+            result = { passed: condFn(inputData), condition };
+          } catch (e) {
+            result = { passed: false, error: e.message };
+          }
+          break;
+
+        case "chat":
+          // 聊天输出
+          result = { output: inputData, type: "chat" };
+          break;
+
+        default:
+          // 其他节点模拟执行
+          await new Promise((r) => setTimeout(r, 500 + Math.random() * 500));
+          result = { 
+            nodeType: node.type, 
+            input: inputData,
+            output: `${config.title} 执行完成`,
+          };
+      }
+
+      const duration = Date.now() - startTime;
+      addLog("success", `节点执行完成 (${duration}ms)`, node.id);
+      
+      // 保存节点结果
+      setNodeResults((prev) => ({
+        ...prev,
+        [node.id]: { success: true, result, duration },
+      }));
+
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      addLog("error", `节点执行失败: ${error.message}`, node.id);
+      setNodeResults((prev) => ({
+        ...prev,
+        [node.id]: { success: false, error: error.message, duration },
+      }));
+      throw error;
+    }
+  };
+
+  // 获取节点的执行顺序（拓扑排序）
+  const getExecutionOrder = () => {
+    const nodes = workflow.nodes || [];
+    const connections = workflow.connections || [];
+    
+    // 构建入度表和邻接表
+    const inDegree = {};
+    const adjacency = {};
+    
+    nodes.forEach((node) => {
+      inDegree[node.id] = 0;
+      adjacency[node.id] = [];
+    });
+    
+    connections.forEach((conn) => {
+      if (adjacency[conn.from]) {
+        adjacency[conn.from].push(conn.to);
+      }
+      if (inDegree[conn.to] !== undefined) {
+        inDegree[conn.to]++;
+      }
+    });
+    
+    // 找到所有入度为0的节点（起始节点）
+    const queue = nodes.filter((node) => inDegree[node.id] === 0);
+    const order = [];
+    
+    while (queue.length > 0) {
+      const node = queue.shift();
+      order.push(node);
+      
+      adjacency[node.id].forEach((nextId) => {
+        inDegree[nextId]--;
+        if (inDegree[nextId] === 0) {
+          const nextNode = nodes.find((n) => n.id === nextId);
+          if (nextNode) queue.push(nextNode);
+        }
+      });
+    }
+    
+    return order;
+  };
+
   // 运行工作流
   const runWorkflow = async () => {
     if ((workflow.nodes || []).length === 0) {
@@ -447,19 +639,57 @@ export default function WorkflowDesigner() {
       return;
     }
 
+    // 重置状态
     setIsRunning(true);
-    showToast("工作流开始执行...", "info");
+    setExecutionLogs([]);
+    setNodeResults({});
+    setExecutionResult(null);
+    setShowResultPanel(true);
+
+    addLog("info", "🚀 工作流开始执行");
+    const startTime = Date.now();
 
     try {
-      // 模拟执行
-      for (const node of (workflow.nodes || [])) {
-        await new Promise((r) => setTimeout(r, 500));
+      // 获取执行顺序
+      const executionOrder = getExecutionOrder();
+      addLog("info", `共 ${executionOrder.length} 个节点需要执行`);
+
+      let lastResult = null;
+      const allResults = {};
+
+      // 按顺序执行节点
+      for (const node of executionOrder) {
+        const result = await executeNode(node, lastResult);
+        lastResult = result;
+        allResults[node.id] = result;
       }
+
+      const totalDuration = Date.now() - startTime;
+      addLog("success", `✅ 工作流执行完成 (总耗时: ${totalDuration}ms)`);
+
+      setExecutionResult({
+        success: true,
+        duration: totalDuration,
+        nodeCount: executionOrder.length,
+        finalOutput: lastResult,
+        allResults,
+      });
+
       showToast("工作流执行完成", "success");
     } catch (error) {
+      const totalDuration = Date.now() - startTime;
+      addLog("error", `❌ 工作流执行失败: ${error.message}`);
+
+      setExecutionResult({
+        success: false,
+        duration: totalDuration,
+        error: error.message,
+      });
+
       showToast("执行失败: " + error.message, "error");
     } finally {
       setIsRunning(false);
+      setExecutingNodeId(null);
     }
   };
 
@@ -965,21 +1195,48 @@ export default function WorkflowDesigner() {
                 const config = getNodeConfig(node.type);
                 if (!config) return null;
                 const isSelected = selectedNode === node.id;
+                const isExecuting = executingNodeId === node.id;
+                const nodeResult = nodeResults[node.id];
 
                 return (
                   <div
                     key={node.id}
-                    className={`absolute w-[180px] bg-theme-bg-secondary border-2 rounded-xl shadow-lg transition-shadow ${
-                      isSelected
+                    className={`absolute w-[180px] bg-theme-bg-secondary border-2 rounded-xl shadow-lg transition-all duration-300 ${
+                      isExecuting
+                        ? "border-yellow-500 shadow-yellow-500/50 scale-105 animate-pulse"
+                        : nodeResult?.success
+                        ? "border-green-500 shadow-green-500/30"
+                        : nodeResult?.error
+                        ? "border-red-500 shadow-red-500/30"
+                        : isSelected
                         ? "border-blue-500 shadow-blue-500/30"
                         : "border-theme-sidebar-border hover:border-theme-text-secondary"
                     }`}
                     style={{ left: node.x, top: node.y }}
                     onMouseDown={(e) => handleNodeDragStart(e, node.id)}
                   >
+                    {/* 执行状态指示器 */}
+                    {isExecuting && (
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center z-20 animate-spin">
+                        <SpinnerGap className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                    {nodeResult?.success && !isExecuting && (
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center z-20">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                    )}
+                    {nodeResult?.error && !isExecuting && (
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center z-20">
+                        <span className="text-white text-xs">✕</span>
+                      </div>
+                    )}
+
                     {/* 节点头部 */}
                     <div
-                      className={`flex items-center gap-2 px-3 py-2 rounded-t-xl ${config.color}`}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-t-xl ${config.color} ${
+                        isExecuting ? "animate-pulse" : ""
+                      }`}
                     >
                       <span className="text-white">{config.icon}</span>
                       <span className="text-white text-sm font-medium truncate flex-1">
@@ -989,9 +1246,15 @@ export default function WorkflowDesigner() {
 
                     {/* 节点内容 */}
                     <div className="p-3 min-h-[40px]">
-                      <p className="text-xs text-theme-text-secondary">
-                        {node.id.slice(0, 15)}...
-                      </p>
+                      {nodeResult?.duration ? (
+                        <p className="text-xs text-theme-text-secondary">
+                          耗时: {nodeResult.duration}ms
+                        </p>
+                      ) : (
+                        <p className="text-xs text-theme-text-secondary">
+                          {node.id.slice(0, 15)}...
+                        </p>
+                      )}
                     </div>
 
                     {/* 输入连接点 (蓝色) */}
@@ -1481,6 +1744,92 @@ export default function WorkflowDesigner() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 执行结果面板 */}
+      {showResultPanel && (
+        <div className="fixed bottom-0 right-0 w-[400px] h-[400px] bg-theme-bg-secondary border-l border-t border-theme-sidebar-border shadow-2xl z-40 flex flex-col">
+          {/* 面板头部 */}
+          <div className="flex items-center justify-between p-3 border-b border-theme-sidebar-border bg-theme-bg-primary/50">
+            <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
+              <Lightning className="w-4 h-4 text-yellow-400" />
+              执行日志
+              {isRunning && (
+                <SpinnerGap className="w-4 h-4 animate-spin text-yellow-400" />
+              )}
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setExecutionLogs([])}
+                className="text-xs text-theme-text-secondary hover:text-theme-text-primary"
+              >
+                清空
+              </button>
+              <button
+                onClick={() => setShowResultPanel(false)}
+                className="p-1 hover:bg-theme-action-menu-item-hover rounded"
+              >
+                <X className="w-4 h-4 text-theme-text-secondary" />
+              </button>
+            </div>
+          </div>
+
+          {/* 日志列表 */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 text-xs font-mono">
+            {executionLogs.map((log) => (
+              <div
+                key={log.id}
+                className={`p-2 rounded ${
+                  log.type === "error"
+                    ? "bg-red-500/10 text-red-400"
+                    : log.type === "success"
+                    ? "bg-green-500/10 text-green-400"
+                    : log.type === "warning"
+                    ? "bg-yellow-500/10 text-yellow-400"
+                    : "bg-theme-bg-primary/50 text-theme-text-secondary"
+                }`}
+              >
+                <span className="opacity-50">[{log.timestamp}]</span> {log.message}
+              </div>
+            ))}
+            {executionLogs.length === 0 && (
+              <div className="text-center text-theme-text-secondary py-4">
+                暂无执行日志
+              </div>
+            )}
+          </div>
+
+          {/* 执行结果 */}
+          {executionResult && (
+            <div className="border-t border-theme-sidebar-border p-3 bg-theme-bg-primary/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-theme-text-primary">
+                  {executionResult.success ? "✅ 执行成功" : "❌ 执行失败"}
+                </span>
+                <span className="text-xs text-theme-text-secondary">
+                  耗时: {executionResult.duration}ms
+                </span>
+              </div>
+              
+              {executionResult.finalOutput && (
+                <div className="mt-2">
+                  <p className="text-xs text-theme-text-secondary mb-1">最终输出:</p>
+                  <pre className="text-xs bg-theme-bg-primary p-2 rounded overflow-x-auto max-h-[100px] overflow-y-auto text-theme-text-primary">
+                    {typeof executionResult.finalOutput === "string"
+                      ? executionResult.finalOutput
+                      : JSON.stringify(executionResult.finalOutput, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              {executionResult.error && (
+                <div className="mt-2">
+                  <p className="text-xs text-red-400">{executionResult.error}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
