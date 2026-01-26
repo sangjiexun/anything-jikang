@@ -2,6 +2,22 @@ import React, { useState, useEffect, useRef } from "react";
 import { callAmapTool, getAmapMCPConfig } from "@/utils/mcp/amapTools";
 import { MapPin, Compass, Clock, Star, X, CaretRight } from "@phosphor-icons/react";
 
+// 验证坐标是否有效（工具函数，可在组件间共享）
+const isValidCoordinate = (coord) => {
+  if (!coord || !Array.isArray(coord) || coord.length < 2) return false;
+  const [lng, lat] = coord;
+  return (
+    typeof lng === "number" &&
+    typeof lat === "number" &&
+    !isNaN(lng) &&
+    !isNaN(lat) &&
+    lng >= -180 &&
+    lng <= 180 &&
+    lat >= -90 &&
+    lat <= 90
+  );
+};
+
 // HUD风格地图组件（使用MapLibre GL JS - 2025最新开源地图框架）
 function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
   const mapRef = useRef(null);
@@ -9,6 +25,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
   const markersRef = useRef([]);
   const routeSourceRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const hoverInfoRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [hoveredPoi, setHoveredPoi] = useState(null);
 
@@ -219,22 +236,6 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
       }, 0);
     };
   }, [center, zoom, route, pois, onPoiClick]);
-
-  // 验证坐标是否有效
-  const isValidCoordinate = (coord) => {
-    if (!coord || !Array.isArray(coord) || coord.length < 2) return false;
-    const [lng, lat] = coord;
-    return (
-      typeof lng === "number" &&
-      typeof lat === "number" &&
-      !isNaN(lng) &&
-      !isNaN(lat) &&
-      lng >= -180 &&
-      lng <= 180 &&
-      lat >= -90 &&
-      lat <= 90
-    );
-  };
 
   // 绘制流动路线（使用MapLibre GL JS + 自定义动画）
   const drawAnimatedRoute = (map, routeCoords) => {
