@@ -195,8 +195,15 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
           if (markersRef.current && markersRef.current.length > 0) {
             markersRef.current.forEach((marker) => {
               try {
-                if (marker && marker.remove) {
-                  marker.remove();
+                if (marker) {
+                  // 先尝试 setMap(null)，这是更安全的清理方式
+                  if (typeof marker.setMap === 'function') {
+                    marker.setMap(null);
+                  }
+                  // 如果标记有 remove 方法，也调用它
+                  if (typeof marker.remove === 'function') {
+                    marker.remove();
+                  }
                 }
               } catch (e) {
                 // 忽略单个标记清理错误
@@ -234,10 +241,27 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
             endMarkerRef.current = null;
           }
 
+          // 清理扫描线元素
+          if (scanlineRef.current) {
+            try {
+              const scanline = scanlineRef.current;
+              // 检查元素是否仍然在DOM中且是父节点的子节点
+              if (scanline && scanline.parentNode && scanline.parentNode.contains(scanline)) {
+                scanline.parentNode.removeChild(scanline);
+              }
+            } catch (e) {
+              // 忽略清理错误，可能已经被React移除
+            }
+            scanlineRef.current = null;
+          }
+
           // 清理悬停信息窗口
           if (hoverInfoRef.current) {
             try {
-              hoverInfoRef.current.remove();
+              // AMap.InfoWindow 使用 close() 方法，不是 remove()
+              if (typeof hoverInfoRef.current.close === 'function') {
+                hoverInfoRef.current.close();
+              }
             } catch (e) {
               // 忽略关闭错误
             }
