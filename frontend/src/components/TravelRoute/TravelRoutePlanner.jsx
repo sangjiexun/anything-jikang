@@ -143,12 +143,18 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
       // 使用setTimeout延迟清理，避免与React的DOM清理冲突
       setTimeout(() => {
         try {
+          // 取消动画帧
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+          }
+
           // 清理标记
           if (markersRef.current && markersRef.current.length > 0) {
             markersRef.current.forEach((marker) => {
               try {
-                if (marker && marker.setMap) {
-                  marker.setMap(null);
+                if (marker && marker.remove) {
+                  marker.remove();
                 }
               } catch (e) {
                 // 忽略单个标记清理错误
@@ -158,29 +164,30 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
           }
 
           // 清理路线图层
-          if (routeLayerRef.current && locaInstanceRef.current) {
+          if (mapInstanceRef.current && routeSourceRef.current) {
             try {
-              locaInstanceRef.current.remove(routeLayerRef.current);
+              if (mapInstanceRef.current.getLayer("route-animated")) {
+                mapInstanceRef.current.removeLayer("route-animated");
+              }
+              if (mapInstanceRef.current.getLayer("route-static")) {
+                mapInstanceRef.current.removeLayer("route-static");
+              }
+              if (mapInstanceRef.current.getSource("route")) {
+                mapInstanceRef.current.removeSource("route");
+              }
+              if (mapInstanceRef.current.getSource("route-animated")) {
+                mapInstanceRef.current.removeSource("route-animated");
+              }
             } catch (e) {
               // 忽略清理错误
             }
-            routeLayerRef.current = null;
-          }
-
-          // 清理Loca实例
-          if (locaInstanceRef.current) {
-            try {
-              locaInstanceRef.current.destroy();
-            } catch (e) {
-              // 忽略清理错误
-            }
-            locaInstanceRef.current = null;
+            routeSourceRef.current = null;
           }
 
           // 清理悬停信息窗口
           if (hoverInfoRef.current) {
             try {
-              hoverInfoRef.current.close();
+              hoverInfoRef.current.remove();
             } catch (e) {
               // 忽略关闭错误
             }
@@ -192,7 +199,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
             try {
               // 检查地图容器是否还存在
               if (mapRef.current && mapRef.current.parentNode) {
-                mapInstanceRef.current.destroy();
+                mapInstanceRef.current.remove();
               }
             } catch (e) {
               // 忽略销毁错误
@@ -205,7 +212,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
         }
       }, 0);
     };
-  }, [center, zoom, route, pois, onPoiClick, apiKey]);
+  }, [center, zoom, route, pois, onPoiClick]);
 
   // 验证坐标是否有效
   const isValidCoordinate = (coord) => {
