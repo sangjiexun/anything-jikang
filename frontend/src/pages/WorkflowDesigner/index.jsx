@@ -20,6 +20,7 @@ import {
   Robot,
   Gear,
   SpinnerGap,
+  ListBullets,
 } from "@phosphor-icons/react";
 import Sidebar from "@/components/Sidebar";
 import showToast from "@/utils/toast";
@@ -1186,6 +1187,19 @@ export default function WorkflowDesigner() {
                   运行
                 </>
               )}
+            </button>
+            <button
+              onClick={() => setShowResultPanel(!showResultPanel)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                showResultPanel
+                  ? "bg-blue-500 text-white"
+                  : "bg-theme-bg-secondary text-theme-text-primary border border-theme-sidebar-border hover:bg-theme-action-menu-item-hover"
+              }`}
+              data-tooltip-id="result-panel-btn"
+              data-tooltip-content={showResultPanel ? "隐藏结果" : "显示结果"}
+            >
+              <ListBullets className="w-4 h-4" />
+              结果
             </button>
           </div>
         </div>
