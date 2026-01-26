@@ -848,6 +848,8 @@ const TRANSLATIONS = {
     pause_tts_speech_message: "暂停 TTS 语音播报",
     fork: "分叉",
     delete: "删除",
+    reask: "重新提问",
+    writing_workspace: "智能图文工作台",
     save_submit: "提交保存",
     cancel: "取消",
     edit_prompt: "编辑问题",

@@ -19,6 +19,7 @@ const Actions = ({
   role,
   metrics = {},
   alignmentCls = "",
+  sendCommand,
 }) => {
   const { t } = useTranslation();
   const [selectedFeedback, setSelectedFeedback] = useState(feedbackScore);
@@ -60,6 +61,8 @@ const Actions = ({
             forkThread={forkThread}
             isEditing={isEditing}
             role={role}
+            message={message}
+            onReask={(content) => sendCommand && sendCommand({ text: content, autoSubmit: false })}
           />
         </div>
       </div>

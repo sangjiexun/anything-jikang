@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   BookOpen,
   GitBranch,
@@ -112,11 +112,29 @@ const SIDEBAR_ICONS = [
 export default function RightToolbar() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedTool, setSelectedTool] = useState(null);
+  const [writingContent, setWritingContent] = useState("");
   const {
     showing: showingManageWorkspace,
     showModal: showManageWorkspace,
     hideModal: hideManageWorkspace,
   } = useManageWorkspaceModal();
+
+  // 监听打开智能图文工作台事件
+  useEffect(() => {
+    const handleOpenWritingWorkspace = (e) => {
+      const { content } = e.detail || {};
+      if (content) {
+        setWritingContent(content);
+      }
+      setSelectedTool("image-text-studio");
+      setIsExpanded(true);
+    };
+
+    window.addEventListener("open-writing-workspace", handleOpenWritingWorkspace);
+    return () => {
+      window.removeEventListener("open-writing-workspace", handleOpenWritingWorkspace);
+    };
+  }, []);
 
   const handleToolClick = (toolId) => {
     setSelectedTool(toolId);

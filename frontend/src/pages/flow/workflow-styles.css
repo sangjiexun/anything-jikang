@@ -1,0 +1,345 @@
+/* 工作流设计器 - 极康金统一配色 */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.workflow-designer {
+  @apply font-system bg-slate-950 text-amber-50 overflow-hidden h-screen flex flex-col;
+}
+
+/* Header - 居中样式 */
+.header-centered {
+  @apply bg-slate-900 px-5 py-4 flex justify-between items-center border-b border-amber-900/30 h-[70px] relative z-100;
+}
+
+.header-back {
+  @apply flex-shrink-0 min-w-[120px];
+}
+
+.btn-back {
+  @apply flex items-center gap-2 px-4 py-2 bg-transparent border border-amber-900/40 rounded-lg text-amber-100 cursor-pointer transition-all text-sm font-medium hover:bg-amber-900/20 hover:border-amber-600 hover:-translate-x-0.5;
+}
+
+.back-icon {
+  @apply text-lg font-bold;
+}
+
+.back-text {
+  @apply text-sm;
+}
+
+.header-actions-centered {
+  @apply flex gap-3 items-center flex-1 justify-center;
+}
+
+.header-spacer {
+  @apply flex-shrink-0 min-w-[120px];
+}
+
+.btn-icon {
+  @apply text-lg mr-1.5;
+}
+
+.btn {
+  @apply px-5 py-2.5 border-none rounded-lg cursor-pointer text-sm;
+}
+
+.btn-primary {
+  @apply bg-gradient-to-br from-amber-600 to-amber-700 text-white shadow-lg shadow-amber-600/30 hover:shadow-amber-600/50 transition-all;
+}
+
+.btn-secondary {
+  @apply bg-amber-900/20 text-amber-100 hover:bg-amber-900/30 transition-all;
+}
+
+.btn-secondary:hover {
+  @apply -translate-y-0.5;
+}
+
+/* Sidebar */
+.sidebar {
+  @apply w-[280px] bg-slate-900 border-r border-amber-900/30 flex flex-col overflow-hidden;
+}
+
+.sidebar-header {
+  @apply px-4 py-4 border-b border-amber-900/30 flex justify-between items-center;
+}
+
+.sidebar-header h3 {
+  @apply text-sm text-amber-100 opacity-70 m-0;
+}
+
+.btn-add {
+  @apply w-8 h-8 bg-amber-600 hover:bg-amber-500 border-none rounded-full text-white cursor-pointer transition-colors flex items-center justify-center;
+}
+
+.search-box {
+  @apply w-full px-3 py-2 bg-amber-950/40 border border-amber-900/40 rounded-lg text-amber-50 placeholder-amber-700 text-sm focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 transition-colors;
+}
+
+.menu-section-title {
+  @apply text-xs text-amber-100 opacity-60 mb-2 uppercase tracking-wider;
+}
+
+.divider {
+  @apply h-px bg-amber-900/30 my-2.5;
+}
+
+.category-title {
+  @apply text-xs text-amber-100 opacity-60 mb-2 uppercase tracking-wider;
+}
+
+.node-item {
+  @apply bg-amber-900/15 px-3 py-3 rounded-lg border border-amber-900/30 cursor-move transition-all hover:border-amber-600 hover:translate-x-1;
+}
+
+.node-item:hover {
+  @apply border-amber-600;
+}
+
+/* Canvas */
+.canvas-container {
+  @apply flex-1 flex overflow-hidden;
+}
+
+.canvas-wrapper {
+  @apply flex-1 relative overflow-hidden bg-slate-950;
+  background-image: radial-gradient(circle at center, amber-900/10 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.canvas-controls {
+  @apply flex gap-2.5 bg-slate-900 p-2.5 rounded-lg;
+}
+
+.canvas-controls button {
+  @apply h-10 border-none bg-amber-900/20 text-amber-100 rounded-lg cursor-pointer hover:bg-amber-600 transition-colors;
+}
+
+/* Workflow Node */
+.workflow-node {
+  @apply absolute bg-slate-900 border-2 border-amber-900/40 rounded-xl p-4 shadow-lg;
+}
+
+.workflow-node.selected {
+  @apply border-amber-600 shadow-lg shadow-amber-600/30;
+}
+
+.node-header {
+  @apply px-3 py-3 border-b border-amber-900/30 flex items-center justify-between;
+}
+
+.node-title {
+  @apply text-sm font-semibold text-amber-100;
+}
+
+.node-delete {
+  @apply border-none bg-transparent text-amber-100 opacity-50 cursor-pointer hover:opacity-100 hover:bg-red-600/30 transition-all;
+}
+
+.node-field {
+  @apply px-3 py-2;
+}
+
+.node-field label {
+  @apply text-xs text-amber-100 opacity-70 block mb-1;
+}
+
+.node-field input,
+.node-field textarea {
+  @apply w-full px-2 py-2 bg-amber-950/40 border border-amber-900/40 rounded-lg text-amber-50 text-sm focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 transition-colors;
+}
+
+.connection-point {
+  @apply w-3.5 h-3.5 bg-amber-900/50 border-2 border-amber-100 rounded-full absolute cursor-pointer hover:scale-125 hover:bg-amber-600 transition-all;
+}
+
+.connection-line {
+  @apply fill-none stroke-amber-600 stroke-2 pointer-events-stroke;
+  cursor: pointer;
+  transition: stroke-width 0.2s ease, stroke 0.2s ease;
+  pointer-events: stroke !important;
+}
+
+.connection-line:hover,
+.connection-line.connection-hovered {
+  @apply stroke-amber-400 stroke-[3px];
+}
+
+.connection-delete-btn {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  pointer-events: all !important;
+}
+
+.connection-delete-btn:hover {
+  transform: scale(1.1);
+}
+
+.connection-delete-btn circle {
+  transition: fill 0.2s ease;
+  pointer-events: all !important;
+}
+
+.connection-delete-btn:hover circle {
+  fill: #dc2626;
+}
+
+/* Right Panel */
+.right-panel {
+  @apply w-[350px] bg-slate-900 border-l border-amber-900/30 flex flex-col overflow-hidden;
+}
+
+.panel-header {
+  @apply px-4 py-3 border-b border-amber-900/30 flex items-center justify-between;
+}
+
+.panel-header h3 {
+  @apply text-sm font-semibold text-amber-100 m-0;
+}
+
+.panel-content {
+  @apply flex-1 overflow-y-auto px-4 py-3;
+}
+
+.panel-empty {
+  @apply flex items-center justify-center h-full bg-slate-900 border border-amber-900/30 text-amber-100;
+}
+
+/* Tabs */
+.tabs {
+  @apply flex gap-2 border-b border-amber-900/30;
+}
+
+.tab {
+  @apply px-4 py-2 text-sm text-amber-100 opacity-60 cursor-pointer border-b-2 border-transparent hover:opacity-100 transition-all;
+}
+
+.tab.active {
+  @apply opacity-100 border-b-2 border-amber-600;
+}
+
+/* Chat Panel */
+.chat-messages {
+  @apply flex-1 overflow-y-auto space-y-3 mb-4;
+}
+
+.message {
+  @apply px-3 py-2 rounded-lg text-sm;
+}
+
+.message.user {
+  @apply bg-amber-600/30 text-amber-100 ml-8;
+}
+
+.message.assistant {
+  @apply bg-amber-900/20 text-amber-100 mr-8;
+}
+
+.chat-input {
+  @apply w-full px-3 py-2 bg-amber-950/40 border border-amber-900/40 rounded-lg text-amber-50 text-sm focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 transition-colors;
+}
+
+/* Config Panel */
+.config-item {
+  @apply mb-4;
+}
+
+.config-label {
+  @apply text-xs text-amber-100 opacity-70 block mb-1 font-medium;
+}
+
+.config-input {
+  @apply w-full px-3 py-2 bg-amber-950/40 border border-amber-900/40 rounded-lg text-amber-50 text-sm focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 transition-colors;
+}
+
+.config-select {
+  @apply w-full px-3 py-2 bg-amber-950/40 border border-amber-900/40 rounded-lg text-amber-50 text-sm focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 transition-colors;
+}
+
+/* Execution Log */
+.execution-log {
+  @apply flex-1 overflow-y-auto space-y-1 text-xs font-mono;
+}
+
+.log-entry {
+  @apply px-2 py-1 rounded;
+}
+
+.log-entry.info {
+  @apply bg-blue-900/20 text-blue-300;
+}
+
+.log-entry.success {
+  @apply bg-green-900/20 text-green-300;
+}
+
+.log-entry.warning {
+  @apply bg-yellow-900/20 text-yellow-300;
+}
+
+.log-entry.error {
+  @apply bg-red-900/20 text-red-300;
+}
+
+
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  @apply w-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-slate-900;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-amber-900/40 rounded hover:bg-amber-900/60;
+}
+
+/* 执行动画 */
+.executing-icon {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.btn-primary:disabled {
+  @apply opacity-60 cursor-not-allowed;
+}
+
+/* 工作流外链显示 */
+.workflow-url-container {
+  @apply flex flex-col gap-1 text-xs;
+}
+
+.workflow-url-label {
+  @apply text-amber-100 opacity-60;
+}
+
+.workflow-url-content {
+  @apply flex items-center gap-2;
+}
+
+.workflow-url-link {
+  @apply text-amber-400 hover:text-amber-300 underline truncate max-w-[200px];
+}
+
+.btn-copy-url {
+  @apply w-6 h-6 bg-amber-900/20 hover:bg-amber-600 border-none rounded text-amber-100 cursor-pointer transition-colors flex items-center justify-center text-sm;
+}
+
+.header-spacer {
+  @apply flex-shrink-0 min-w-[120px] flex items-center justify-end;
+}
