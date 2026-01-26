@@ -1107,20 +1107,20 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
     }
   };
 
-  // 添加景点卡片
-  const addAttractionCard = async (attractionName) => {
+  // 添加景点卡片（完全使用MCP高德服务）
+  const addAttractionCard = async (attractionName, city = "北京", providedCoordinates = null, providedAddress = null) => {
     try {
+      // 检查MCP配置
       const config = getAmapMCPConfig();
       if (!config || !config.apiKey) {
-        console.warn("未找到高德地图MCP配置");
+        console.error("高德地图MCP未配置");
         return;
       }
 
-      // 提取城市信息
-      const cityMatch = 
-        message?.match(/(?:在|到|去|前往|游览)([^，,。.\n]+?)(?:的|旅游|游玩|景点|地方)/) || 
-        query?.match(/(?:在|到|去|前往|游览)([^，,。.\n]+?)(?:的|旅游|游玩|景点|地方)/);
-      const city = cityMatch ? cityMatch[1].trim() : "北京";
+      if (!config.enabled) {
+        console.error("高德地图MCP未启用");
+        return;
+      }
 
       // 使用高德MCP获取地址坐标（真实坐标）
       let coordinates = null;
