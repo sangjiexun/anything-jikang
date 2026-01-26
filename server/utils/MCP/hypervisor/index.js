@@ -452,11 +452,14 @@ class MCPHypervisor {
     const transport = await this.#setupServerTransport(server, serverType);
 
     // Add connection event listeners
-    transport.onclose = () => this.log(`${name} - Transport closed`);
-    transport.onerror = (error) =>
+    transport.onclose = () => {
+      this.log(`${name} - Transport closed`);
+      initializeComplete = false;
+    };
+    transport.onerror = (error) => {
       this.log(`${name} - Transport error:`, error);
-    transport.onmessage = (message) =>
-      this.log(`${name} - Transport message:`, message);
+      initializeComplete = false;
+    };
 
     // Connect and await the connection with a timeout
     this.mcps[name] = mcp;
@@ -464,10 +467,38 @@ class MCPHypervisor {
     // 增加超时时间到60秒，因为某些MCP服务器（如npx启动的）需要更多时间
     const connectionTimeout = 60_000; // 60 second timeout
     
+    // 监听服务器响应，确保初始化完成
+    let initializeComplete = false;
+    const originalOnMessage = transport.onmessage;
+    transport.onmessage = (message) => {
+      this.log(`${name} - Transport message:`, message);
+      
+      // 检查是否是初始化响应
+      if (message && message.result && message.result.protocolVersion) {
+        this.log(`${name} - Received initialize response, protocol version: ${message.result.protocolVersion}`);
+        initializeComplete = true;
+      }
+      
+      // 调用原始的消息处理器
+      if (originalOnMessage) {
+        originalOnMessage(message);
+      }
+    };
+    
     const connectionPromise = mcp.connect(transport).then(async () => {
-      // 连接成功后，等待一下确保初始化完成
-      // 某些MCP服务器需要额外时间来完成初始化
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // 连接成功后，等待初始化完成
+      // 某些MCP服务器（特别是npx启动的）需要额外时间来完成初始化
+      let waitCount = 0;
+      const maxWait = 10; // 最多等待10秒
+      while (!initializeComplete && waitCount < maxWait) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        waitCount++;
+      }
+      
+      if (!initializeComplete) {
+        this.log(`${name} - Warning: Initialize response not received within ${maxWait} seconds, but continuing anyway`);
+      }
+      
       return true;
     });
 
