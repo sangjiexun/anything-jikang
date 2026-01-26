@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/SettingsSidebar";
 import { isMobile } from "react-device-detect";
 import Admin from "@/models/admin";
@@ -29,6 +30,7 @@ import paths from "@/utils/paths";
 import AgentFlows from "@/models/agentFlows";
 
 export default function AdminAgents() {
+  const { t } = useTranslation();
   const formEl = useRef(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [settings, setSettings] = useState({});
@@ -292,7 +294,7 @@ export default function AdminAgents() {
 
             <div className="text-theme-text-primary flex items-center gap-x-2">
               <Plug size={24} />
-              <p className="text-lg font-medium">Custom Skills</p>
+              <p className="text-lg font-medium">{t("custom_skills_title")}</p>
             </div>
             <ImportedSkillList
               skills={importedSkills}
@@ -302,7 +304,7 @@ export default function AdminAgents() {
 
             <div className="text-theme-text-primary flex items-center gap-x-2 mt-6">
               <FlowArrow size={24} />
-              <p className="text-lg font-medium">Agent Flows</p>
+              <p className="text-lg font-medium">{t("agent_flows_title")}</p>
             </div>
             <AgentFlowsList
               flows={agentFlows}
@@ -460,7 +462,7 @@ export default function AdminAgents() {
           <div className="flex-none mb-4">
             <div className="text-theme-text-primary flex items-center gap-x-2">
               <Robot size={24} />
-              <p className="text-lg font-medium">Agent Skills</p>
+              <p className="text-lg font-medium">{t("agent-skills")}</p>
             </div>
           </div>
 
@@ -485,7 +487,7 @@ export default function AdminAgents() {
 
               <div className="text-theme-text-primary flex items-center gap-x-2 mt-4">
                 <Plug size={24} />
-                <p className="text-lg font-medium">Custom Skills</p>
+                <p className="text-lg font-medium">{t("custom_skills_title")}</p>
               </div>
               <ImportedSkillList
                 skills={importedSkills}
@@ -496,7 +498,7 @@ export default function AdminAgents() {
               <div className="text-theme-text-primary flex items-center justify-between gap-x-2 mt-4">
                 <div className="flex items-center gap-x-2">
                   <FlowArrow size={24} />
-                  <p className="text-lg font-medium">Agent Flows</p>
+                  <p className="text-lg font-medium">{t("agent_flows_title")}</p>
                 </div>
                 {agentFlows.length === 0 ? (
                   <Link
@@ -601,7 +603,7 @@ export default function AdminAgents() {
               <div className="flex flex-col items-center justify-center h-full text-theme-text-secondary">
                 <Robot size={40} />
                 <p className="font-medium">
-                  Select an Agent Skill, Agent Flow, or MCP Server
+                  {t("agent.mcp.select_prompt")}
                 </p>
               </div>
             )}

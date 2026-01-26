@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import showToast from "@/utils/toast";
 import { CaretDown, Gear } from "@phosphor-icons/react";
 import MCPLogo from "@/media/agents/mcp-logo.svg";
@@ -8,23 +9,19 @@ import MCPServers from "@/models/mcpServers";
 import pluralize from "pluralize";
 
 function ManageServerMenu({ server, toggleServer, onDelete }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(server.running);
   const menuRef = useRef(null);
 
   async function deleteServer() {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this MCP server? It will be removed from your config file and you will need to add it back manually."
-      )
-    )
-      return;
+    if (!window.confirm(t("agent.mcp.server_actions.delete_confirm"))) return;
     const { success, error } = await MCPServers.deleteServer(server.name);
     if (success) {
-      showToast("MCP server deleted successfully.", "success");
+      showToast(t("agent.mcp.server_actions.delete_success"), "success");
       onDelete(server.name);
     } else {
-      showToast(error || "Failed to delete MCP server.", "error");
+      showToast(error || t("agent.mcp.server_actions.delete_error"), "error");
     }
   }
 
@@ -32,8 +29,8 @@ function ManageServerMenu({ server, toggleServer, onDelete }) {
     if (
       !window.confirm(
         running
-          ? "Are you sure you want to stop this MCP server? It will be started automatically when you next start the server."
-          : "Are you sure you want to start this MCP server? It will be started automatically when you next start the server."
+          ? t("agent.mcp.server_actions.stop_confirm")
+          : t("agent.mcp.server_actions.start_confirm")
       )
     )
       return;
@@ -44,12 +41,14 @@ function ManageServerMenu({ server, toggleServer, onDelete }) {
       setRunning(newState);
       toggleServer(server.name);
       showToast(
-        `MCP server ${server.name} ${newState ? "started" : "stopped"} successfully.`,
+        newState
+          ? t("agent.mcp.server_actions.start_success", { name: server.name })
+          : t("agent.mcp.server_actions.stop_success", { name: server.name }),
         "success",
         { clear: true }
       );
     } else {
-      showToast(error || "Failed to toggle MCP server.", "error", {
+      showToast(error || t("agent.mcp.server_actions.toggle_error"), "error", {
         clear: true,
       });
     }
@@ -85,7 +84,7 @@ function ManageServerMenu({ server, toggleServer, onDelete }) {
             className="border-none flex items-center rounded-lg gap-x-2 hover:bg-theme-action-menu-item-hover py-1.5 px-2 transition-colors duration-200 w-full text-left"
           >
             <span className="text-sm">
-              {running ? "Stop MCP Server" : "Start MCP Server"}
+              {running ? t("agent.mcp.server_actions.stop") : t("agent.mcp.server_actions.start")}
             </span>
           </button>
           <button
@@ -93,7 +92,7 @@ function ManageServerMenu({ server, toggleServer, onDelete }) {
             onClick={deleteServer}
             className="border-none flex items-center rounded-lg gap-x-2 hover:bg-theme-action-menu-item-hover py-1.5 px-2 transition-colors duration-200 w-full text-left"
           >
-            <span className="text-sm">Delete MCP Server</span>
+            <span className="text-sm">{t("agent.mcp.server_actions.delete")}</span>
           </button>
         </div>
       )}
@@ -102,6 +101,7 @@ function ManageServerMenu({ server, toggleServer, onDelete }) {
 }
 
 export default function ServerPanel({ server, toggleServer, onDelete }) {
+  const { t } = useTranslation();
   return (
     <>
       <div className="p-2">
@@ -114,8 +114,7 @@ export default function ServerPanel({ server, toggleServer, onDelete }) {
               </label>
               {server.tools.length > 0 && (
                 <p className="text-theme-text-secondary text-sm">
-                  {server.tools.length} {pluralize("tool", server.tools.length)}{" "}
-                  available
+                  {t("agent.mcp.server_panel.tools_available", { count: server.tools.length })}
                 </p>
               )}
             </div>
@@ -136,16 +135,17 @@ export default function ServerPanel({ server, toggleServer, onDelete }) {
 }
 
 function RenderServerConfig({ config = null }) {
+  const { t } = useTranslation();
   if (!config) return null;
   return (
     <div className="flex flex-col gap-y-2">
-      <p className="text-theme-text-primary text-sm">Startup Command</p>
+      <p className="text-theme-text-primary text-sm">{t("agent.mcp.server_panel.startup_command")}</p>
       <div className="bg-theme-bg-primary rounded-lg p-4">
         <p className="text-theme-text-secondary text-sm text-left">
-          <span className="font-bold">Command:</span> {config.command}
+          <span className="font-bold">{t("agent.mcp.server_panel.command")}:</span> {config.command}
         </p>
         <p className="text-theme-text-secondary text-sm text-left">
-          <span className="font-bold">Arguments:</span>{" "}
+          <span className="font-bold">{t("agent.mcp.server_panel.arguments")}:</span>{" "}
           {config.args ? config.args.join(" ") : "None"}
         </p>
       </div>
@@ -154,12 +154,12 @@ function RenderServerConfig({ config = null }) {
 }
 
 function RenderServerStatus({ server }) {
+  const { t } = useTranslation();
   if (server.running || !server.error) return null;
   return (
     <div className="flex flex-col gap-y-2">
       <p className="text-theme-text-primary text-sm">
-        This MCP server is not running - it may be stopped or experiencing an
-        error on startup.
+        {t("agent.mcp.server_panel.not_running")}
       </p>
       <div className="bg-theme-bg-primary rounded-lg p-4">
         <p className="text-red-500 text-sm font-mono">{server.error}</p>
@@ -182,6 +182,7 @@ function RenderServerTools({ tools = [] }) {
 }
 
 function ServerTool({ tool }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   return (
@@ -214,7 +215,7 @@ function ServerTool({ tool }) {
           </div>
           <div className="flex flex-col gap-y-2">
             <p className="text-theme-text-primary text-sm text-left">
-              Tool call arguments
+              {t("agent.mcp.server_panel.tool_call_arguments")}
             </p>
             <div className="flex flex-col gap-y-2">
               {Object.entries(tool.inputSchema?.properties || {}).map(
