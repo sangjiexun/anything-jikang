@@ -119,6 +119,8 @@ export default function AmapResult({ query, onResult }) {
         lowerQuery.includes("怎么走") ||
         lowerQuery.includes("怎么去") ||
         lowerQuery.includes("到") ||
+        lowerQuery.includes("规划") ||
+        lowerQuery.includes("规划图") ||
         (lowerQuery.includes("从") && lowerQuery.includes("到"))
       ) {
         // 提取起点和终点
@@ -151,7 +153,7 @@ export default function AmapResult({ query, onResult }) {
           // 确定路线类型
           if (lowerQuery.includes("步行") || lowerQuery.includes("走路") || lowerQuery.includes("徒步")) {
             tool = "maps_direction_walking";
-          } else if (lowerQuery.includes("骑行") || lowerQuery.includes("骑车") || lowerQuery.includes("自行车")) {
+          } else if (lowerQuery.includes("骑行") || lowerQuery.includes("骑车") || lowerQuery.includes("自行车") || lowerQuery.includes("骑行规划")) {
             tool = "maps_bicycling";
           } else if (lowerQuery.includes("公交") || lowerQuery.includes("地铁") || lowerQuery.includes("公共交通") || lowerQuery.includes("公共交通")) {
             tool = "maps_direction_transit_integrated";
@@ -164,6 +166,23 @@ export default function AmapResult({ query, onResult }) {
           
           params.origin = origin;
           params.destination = destination;
+        } else if (lowerQuery.includes("规划") || lowerQuery.includes("规划图")) {
+          // 如果只有城市名称，尝试进行地理编码获取坐标
+          const cityMatch = queryText.match(/(?:北京|上海|广州|深圳|杭州|成都|武汉|西安|南京|天津|苏州|重庆|长沙|郑州|东莞|青岛|沈阳|宁波|昆明|大连|厦门|合肥|佛山|石家庄|福州|无锡|哈尔滨|济南|长春|南昌|太原|南宁|贵阳|海口|兰州|银川|西宁|呼和浩特|乌鲁木齐|拉萨|香港|澳门|台湾)/);
+          if (cityMatch) {
+            const cityName = cityMatch[0];
+            // 先进行地理编码获取城市中心坐标
+            const geoResult = await callAmapTool("maps_geo", { address: cityName });
+            if (geoResult && geoResult.success && geoResult.data && geoResult.data.location) {
+              const cityCenter = geoResult.data.location;
+              // 使用城市中心作为起点和终点（可以后续优化为更合理的路线）
+              tool = lowerQuery.includes("骑行") || lowerQuery.includes("骑车") || lowerQuery.includes("自行车") 
+                ? "maps_bicycling" 
+                : "maps_direction_driving";
+              params.origin = cityCenter;
+              params.destination = cityCenter;
+            }
+          }
         }
       }
       // 5. 距离测量
