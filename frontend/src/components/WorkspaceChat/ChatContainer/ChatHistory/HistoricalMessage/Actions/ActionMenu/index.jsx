@@ -315,13 +315,20 @@ function FlashcardCreateModal({ workspace, message, onClose }) {
         }
         
         // 结合当前消息和知识库内容
-        prompt = `基于以下AI回答内容和知识库内容，生成 ${questionCount} 道${difficultyMap[difficulty]}难度的强化学习问答题目。
+        prompt = `基于以下AI回答内容和知识库内容，生成 ${questionCount} 道${difficultyMap[difficulty]}难度的GRE风格题目。
 
 要求：
 1. 题目应该结合AI回答的核心观点和知识库的详细内容
-2. 每道题目包含：问题、答案、解释、引用位置
-3. 难度级别：${difficultyMap[difficulty]}
-4. 返回JSON格式
+2. 题目类型参考GRE风格，包括：
+   - 单选题（multiple_choice）：4-5个选项，只有一个正确答案
+   - 多选题（multiple_select）：多个选项，可能有多个正确答案
+   - 填空题（fill_blank）：在句子中填入合适的词或短语
+   - 判断题（true_false）：判断陈述是否正确
+   - 匹配题（matching）：将左右两列进行匹配
+3. 尽量减少简答题，优先使用选择题和填空题，让学习更轻松
+4. 每道题目包含：题目类型、问题、选项（如果是选择题）、答案、解释、引用位置
+5. 难度级别：${difficultyMap[difficulty]}
+6. 返回JSON格式
 
 AI回答内容：
 ${message || "无"}
@@ -336,13 +343,20 @@ ${allContent.substring(0, 8000)}`;
           return;
         }
         
-        prompt = `基于以下AI回答内容，生成 ${questionCount} 道${difficultyMap[difficulty]}难度的问答题目。
+        prompt = `基于以下AI回答内容，生成 ${questionCount} 道${difficultyMap[difficulty]}难度的GRE风格题目。
 
 要求：
 1. 题目应该覆盖回答的核心内容
-2. 每道题目包含：问题、答案、解释
-3. 难度级别：${difficultyMap[difficulty]}
-4. 返回JSON格式
+2. 题目类型参考GRE风格，包括：
+   - 单选题（multiple_choice）：4-5个选项，只有一个正确答案
+   - 多选题（multiple_select）：多个选项，可能有多个正确答案
+   - 填空题（fill_blank）：在句子中填入合适的词或短语
+   - 判断题（true_false）：判断陈述是否正确
+   - 匹配题（matching）：将左右两列进行匹配
+3. 尽量减少简答题，优先使用选择题和填空题，让学习更轻松
+4. 每道题目包含：题目类型、问题、选项（如果是选择题）、答案、解释
+5. 难度级别：${difficultyMap[difficulty]}
+6. 返回JSON格式
 
 AI回答内容：
 ${message.substring(0, 8000)}`;
@@ -380,8 +394,11 @@ ${message.substring(0, 8000)}`;
 {
   "flashcards": [
     {
+      "type": "multiple_choice",
       "question": "问题内容",
-      "answer": "答案内容",
+      "options": ["选项A", "选项B", "选项C", "选项D"],
+      "answer": "选项A",
+      "answerIndex": 0,
       "explanation": "详细解释",
       "reference": {
         "document": "文档名称或来源",
@@ -389,9 +406,44 @@ ${message.substring(0, 8000)}`;
         "page": "页码（如果有）",
         "section": "章节（如果有）"
       }
+    },
+    {
+      "type": "fill_blank",
+      "question": "句子中需要填空的部分用___表示，例如：人工智能是___的产物。",
+      "answer": "科技发展",
+      "explanation": "详细解释",
+      "reference": {
+        "document": "文档名称或来源"
+      }
+    },
+    {
+      "type": "true_false",
+      "question": "陈述内容",
+      "answer": "true",
+      "explanation": "详细解释",
+      "reference": {
+        "document": "文档名称或来源"
+      }
+    },
+    {
+      "type": "multiple_select",
+      "question": "问题内容（可能有多个正确答案）",
+      "options": ["选项A", "选项B", "选项C", "选项D"],
+      "answer": ["选项A", "选项C"],
+      "answerIndex": [0, 2],
+      "explanation": "详细解释",
+      "reference": {
+        "document": "文档名称或来源"
+      }
     }
   ]
-}`;
+}
+
+注意：
+- type字段必填，可选值：multiple_choice, multiple_select, fill_blank, true_false, matching
+- 选择题必须包含options和answerIndex字段
+- 多选题的answer和answerIndex都是数组
+- 尽量使用选择题和填空题，减少简答题`;
 
       const llmResponse = await fetch(`${llmConfig.endpoint}/v1/chat/completions`, {
         method: "POST",
@@ -405,8 +457,8 @@ ${message.substring(0, 8000)}`;
             {
               role: "system",
               content: selectedDocs.length > 0 
-                ? "你是一个专业的题目生成助手，能够根据AI回答和知识库内容生成高质量的强化学习问答题目。请严格按照JSON格式返回结果。"
-                : "你是一个专业的题目生成助手，能够根据AI回答内容生成高质量的问答题目。请严格按照JSON格式返回结果。",
+                ? "你是一个专业的GRE风格题目生成助手，能够根据AI回答和知识库内容生成高质量的选择题、填空题、判断题等。请优先生成选择题和填空题，减少简答题。严格按照JSON格式返回结果。"
+                : "你是一个专业的GRE风格题目生成助手，能够根据AI回答内容生成高质量的选择题、填空题、判断题等。请优先生成选择题和填空题，减少简答题。严格按照JSON格式返回结果。",
             },
             { role: "user", content: fullPrompt },
           ],
