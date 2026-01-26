@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { callAmapTool, getAmapMCPConfig } from "@/utils/mcp/amapTools";
 import AmapViewer from "@/components/AmapViewer";
-import { SpinnerGap, MapPin, Navigation, Cloud, MagnifyingGlass } from "@phosphor-icons/react";
+import { SpinnerGap, MapPin, Compass, Cloud, MagnifyingGlass } from "@phosphor-icons/react";
 
 export default function AmapResult({ query, onResult }) {
   const [loading, setLoading] = useState(true);
@@ -281,7 +281,7 @@ export default function AmapResult({ query, onResult }) {
           <div className="space-y-4">
             <div className="p-4 bg-theme-bg-primary rounded-lg">
               <div className="flex items-center gap-2 mb-2">
-                <Navigation className="w-5 h-5 text-orange-400" />
+                <Compass className="w-5 h-5 text-orange-400" />
                 <span className="font-semibold text-white">路线规划</span>
               </div>
               <div className="space-y-1 text-white">
