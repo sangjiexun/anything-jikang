@@ -1,5 +1,5 @@
 import React from "react";
-import { Trash, TreeView, ArrowClockwise, PencilLine } from "@phosphor-icons/react";
+import { Trash, TreeView, ArrowClockwise, PencilLine, Lightning } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 
 function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
@@ -32,6 +32,14 @@ function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
     window.dispatchEvent(
       new CustomEvent("open-writing-workspace", { detail: { content: message } })
     );
+  };
+
+  // 加强 - 使用 Agent Skills 重新处理消息
+  const handleEnhance = () => {
+    if (onReask && message) {
+      // 使用 @agent 命令触发 agent 模式，并带上原始消息
+      onReask(`@agent ${message}`);
+    }
   };
 
   if (!chatId || isEditing || role === "user") return null;
@@ -68,6 +76,24 @@ function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
             color="var(--theme-sidebar-footer-icon-fill)"
             size={20}
             className="mb-1"
+          />
+        </button>
+      </div>
+
+      {/* 加强按钮 - 使用 Agent Skills */}
+      <div className="mt-3 relative">
+        <button
+          onClick={handleEnhance}
+          className="border-none text-zinc-300"
+          data-tooltip-id="enhance-message"
+          data-tooltip-content={t("chat_window.enhance_tooltip")}
+          aria-label={t("chat_window.enhance")}
+        >
+          <Lightning
+            color="var(--theme-sidebar-footer-icon-fill)"
+            size={20}
+            className="mb-1"
+            weight="fill"
           />
         </button>
       </div>
