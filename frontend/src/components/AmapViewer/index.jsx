@@ -310,8 +310,8 @@ export default function AmapViewer({
 
       const loca = locaInstanceRef.current;
 
-      // 构建属性筛选查询
-      const propertiesFilter = JSON.stringify({
+      // 构建属性筛选查询 - 确保格式正确
+      const propertiesFilter = {
         relation: "and",
         conditions: [
           {
@@ -320,18 +320,44 @@ export default function AmapViewer({
             value: trajectoryData.terminalId || 1,
           },
         ],
-      });
+      };
 
       // 调用GeoHUB API获取轨迹点
-      const url = `https://restapi.amap.com/rest/lbs/geohub/place/properties?key=${trajectoryData.webServiceKey}&dataset_id=${trajectoryData.datasetId}&properties=${encodeURIComponent(propertiesFilter)}&offset=300`;
+      // 注意：properties参数需要是JSON字符串，但不需要双重编码
+      const propertiesStr = JSON.stringify(propertiesFilter);
+      const url = `https://restapi.amap.com/rest/lbs/geohub/place/properties?key=${encodeURIComponent(trajectoryData.webServiceKey)}&dataset_id=${encodeURIComponent(trajectoryData.datasetId)}&properties=${encodeURIComponent(propertiesStr)}&offset=300`;
+
+      console.log("调用GeoHUB API:", url);
+      console.log("参数详情:", {
+        key: trajectoryData.webServiceKey,
+        dataset_id: trajectoryData.datasetId,
+        properties: propertiesStr,
+        offset: 300,
+      });
 
       window.jQuery.ajax({
         url: url,
         method: "GET",
+        dataType: "json",
       })
         .done(function (res) {
+          console.log("GeoHUB API响应:", res);
+          
+          // 检查API错误响应
+          if (res.status === "0" || res.status === 0) {
+            console.error("GeoHUB API错误:", res.info || res.message, "错误码:", res.infocode);
+            if (res.info === "INVALID_PARAMS" || res.infocode === "20000") {
+              console.error("参数错误详情:", {
+                key: trajectoryData.webServiceKey ? "已提供" : "缺失",
+                dataset_id: trajectoryData.datasetId ? "已提供" : "缺失",
+                properties: propertiesStr,
+              });
+            }
+            return;
+          }
+
           if (!res || !res.objects || res.objects.length === 0) {
-            console.warn("未找到轨迹数据");
+            console.warn("未找到轨迹数据，响应:", res);
             return;
           }
 
@@ -397,8 +423,28 @@ export default function AmapViewer({
             map.setBounds(bounds);
           }
         })
-        .fail(function (error) {
-          console.error("获取轨迹数据失败:", error);
+        .fail(function (jqXHR, textStatus, errorThrown) {
+          console.error("获取轨迹数据失败:", {
+            status: jqXHR.status,
+            statusText: jqXHR.statusText,
+            textStatus: textStatus,
+            errorThrown: errorThrown,
+            responseText: jqXHR.responseText,
+          });
+          
+          // 尝试解析错误响应
+          try {
+            const errorData = JSON.parse(jqXHR.responseText);
+            if (errorData.status === "0" && errorData.info === "INVALID_PARAMS") {
+              console.error("参数错误，请检查：");
+              console.error("1. API Key是否正确（Web服务Key）");
+              console.error("2. 数据集ID是否存在");
+              console.error("3. 属性字段名称是否正确（terminalId）");
+              console.error("4. API Key是否有GeoHUB权限");
+            }
+          } catch (e) {
+            // 忽略解析错误
+          }
         });
     } catch (error) {
       console.error("绘制轨迹失败:", error);
