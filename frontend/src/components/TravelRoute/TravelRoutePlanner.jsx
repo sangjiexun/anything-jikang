@@ -932,10 +932,15 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
           console.warn("高德地图MCP未配置，无法搜索地址坐标");
         } else {
           for (const address of addresses) {
+            // 跳过无效地址
+            if (!address || address.trim().length === 0 || address.length < 2) {
+              continue;
+            }
+            
             try {
               // 使用MCP maps_geo工具进行正向地理编码
               const geoResult = await callAmapTool("maps_geo", {
-                address: address,
+                address: address.trim(),
               });
 
               if (geoResult && geoResult.success && geoResult.data) {
@@ -944,13 +949,23 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
                   const [lng, lat] = location.split(",").map(Number);
                   if (!isNaN(lng) && !isNaN(lat) && isValidCoordinate([lng, lat])) {
                     coordinates.push([lng, lat]);
+                    // 找到有效坐标后继续下一个地址
+                    continue;
                   }
                 }
-              } else {
-                console.warn(`MCP地理编码失败: ${geoResult?.message || "未知错误"}`);
+              }
+              
+              // 如果地理编码失败，记录详细信息但不中断流程
+              if (geoResult) {
+                const errorMsg = geoResult.message || geoResult.infocode || "未知错误";
+                // 只记录非预期的错误（如 ENGINE_RESPONSE_DATA_ERROR），忽略常见的"无结果"错误
+                if (errorMsg.includes("ENGINE") || errorMsg.includes("ERROR") || errorMsg.includes("INVALID")) {
+                  console.warn(`MCP地理编码失败 [${address}]: ${errorMsg}`, geoResult);
+                }
               }
             } catch (error) {
-              console.warn(`通过高德MCP搜索地址"${address}"失败:`, error);
+              // 捕获异常但不中断流程
+              console.warn(`通过高德MCP搜索地址"${address}"时发生异常:`, error.message || error);
             }
           }
         }
@@ -1136,10 +1151,15 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
 
         // 使用MCP高德服务搜索景点坐标
         for (const addr of addressVariants) {
+          // 跳过无效地址
+          if (!addr || addr.trim().length === 0) {
+            continue;
+          }
+          
           try {
             // 首先尝试使用maps_geo进行地理编码
             const geoResult = await callAmapTool("maps_geo", {
-              address: addr,
+              address: addr.trim(),
             });
 
             if (geoResult && geoResult.success && geoResult.data) {
@@ -1149,33 +1169,44 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
                 if (!isNaN(lng) && !isNaN(lat) && lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
                   coordinates = [lng, lat];
                   address = geoResult.data.formatted_address || addr;
-                  break;
+                  break; // 找到有效坐标，退出循环
                 }
+              }
+            } else if (geoResult && !geoResult.success) {
+              // 记录错误但不中断，继续尝试文本搜索
+              const errorMsg = geoResult.message || geoResult.infocode || "未知错误";
+              if (errorMsg.includes("ENGINE") || errorMsg.includes("ERROR") || errorMsg.includes("INVALID")) {
+                console.debug(`地理编码失败 [${addr}]: ${errorMsg}`);
               }
             }
             
             // 如果地理编码失败，尝试使用文本搜索
             if (!coordinates) {
-              const searchResult = await callAmapTool("maps_text_search", {
-                keywords: addr,
-                city: city,
-              });
-              
-              if (searchResult && searchResult.success && searchResult.data && searchResult.data.length > 0) {
-                const poi = searchResult.data[0];
-                if (poi.location) {
-                  const [lng, lat] = poi.location.split(",").map(Number);
-                  if (!isNaN(lng) && !isNaN(lat) && isValidCoordinate([lng, lat])) {
-                    coordinates = [lng, lat];
-                    address = poi.address || poi.name || addr;
-                    break;
+              try {
+                const searchResult = await callAmapTool("maps_text_search", {
+                  keywords: addr.trim(),
+                  city: city,
+                });
+                
+                if (searchResult && searchResult.success && searchResult.data && searchResult.data.length > 0) {
+                  const poi = searchResult.data[0];
+                  if (poi.location) {
+                    const [lng, lat] = poi.location.split(",").map(Number);
+                    if (!isNaN(lng) && !isNaN(lat) && isValidCoordinate([lng, lat])) {
+                      coordinates = [lng, lat];
+                      address = poi.address || poi.name || addr;
+                      break; // 找到有效坐标，退出循环
+                    }
                   }
                 }
+              } catch (searchError) {
+                // 文本搜索失败，继续尝试下一个地址格式
+                console.debug(`文本搜索失败 [${addr}]:`, searchError.message || searchError);
               }
             }
           } catch (error) {
-            // 继续尝试下一个地址格式
-            console.warn(`搜索地址"${addr}"失败:`, error);
+            // 捕获异常，继续尝试下一个地址格式
+            console.debug(`搜索地址"${addr}"时发生异常:`, error.message || error);
             continue;
           }
         }
