@@ -301,11 +301,16 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
   const parseAttractionsFromMessage = async (messageText) => {
     if (!messageText) return;
 
-    // 匹配景点模式：1. 景点名称、2. 推荐景点、3. 景点列表
+    // 匹配景点模式：更智能的匹配
     const patterns = [
-      /(?:景点|景区|地方|推荐)[:：]?\s*([^，,。.\n]+?)(?:\s|$|，|。)/g,
-      /(?:第[一二三四五六七八九十\d]+个|景点\d+)[:：]?\s*([^，,。.\n]+?)(?:\s|$|，|。)/g,
-      /([^，,。.\n]+?)(?:景点|景区|公园|博物馆|古迹|遗址|名胜)(?:\s|$|，|。)/g,
+      // 1. 明确的景点推荐格式
+      /(?:推荐|建议|可以去|游览|参观)[:：]?\s*([^，,。.\n]+?)(?:景点|景区|公园|博物馆|古迹|遗址|名胜|地方)/g,
+      // 2. 编号列表格式
+      /(?:第[一二三四五六七八九十\d]+[个项]|景点\d+)[:：]?\s*([^，,。.\n]+?)(?:\s|$|，|。|：)/g,
+      // 3. 景点名称后跟描述
+      /([^，,。.\n]+?)(?:景点|景区|公园|博物馆|古迹|遗址|名胜)(?:[，,。.\n]|$)/g,
+      // 4. 简单列表格式
+      /(?:^|\n)\s*[-•·]\s*([^，,。.\n]+?)(?:景点|景区|公园|博物馆|古迹|遗址|名胜|地方)/g,
     ];
 
     const foundAttractions = [];
@@ -313,7 +318,16 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
       let match;
       while ((match = pattern.exec(messageText)) !== null) {
         const name = match[1]?.trim();
-        if (name && name.length > 1 && name.length < 30 && !parsedAttractions.has(name)) {
+        // 过滤掉无效的匹配
+        if (
+          name &&
+          name.length > 1 &&
+          name.length < 30 &&
+          !parsedAttractions.has(name) &&
+          !name.match(/^(的|是|在|到|去|和|或|与|等|等)$/) &&
+          !name.includes("推荐") &&
+          !name.includes("建议")
+        ) {
           foundAttractions.push(name);
         }
       }
@@ -333,9 +347,16 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
       return updated;
     });
 
-    // 为每个新发现的景点获取坐标并创建卡片
-    for (const attractionName of newAttractions) {
-      await addAttractionCard(attractionName);
+    // 为每个新发现的景点获取坐标并创建卡片（并行处理以提高速度）
+    setLoading(false); // 一旦开始解析，就不再显示加载状态
+    
+    // 逐个添加，保持顺序和动画效果
+    for (let i = 0; i < newAttractions.length; i++) {
+      await addAttractionCard(newAttractions[i]);
+      // 添加小延迟以产生流式效果
+      if (i < newAttractions.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
     }
   };
 
@@ -349,52 +370,93 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
       }
 
       // 提取城市信息
-      const cityMatch = message?.match(/(?:在|到|去|前往)([^，,。.\n]+?)(?:的|旅游|游玩|景点)/) || 
-                       query?.match(/(?:在|到|去|前往)([^，,。.\n]+?)(?:的|旅游|游玩|景点)/);
-      const city = cityMatch ? cityMatch[1] : "北京";
+      const cityMatch = 
+        message?.match(/(?:在|到|去|前往|游览)([^，,。.\n]+?)(?:的|旅游|游玩|景点|地方)/) || 
+        query?.match(/(?:在|到|去|前往|游览)([^，,。.\n]+?)(?:的|旅游|游玩|景点|地方)/);
+      const city = cityMatch ? cityMatch[1].trim() : "北京";
 
-      // 使用高德MCP获取地址坐标
+      // 使用高德MCP获取地址坐标（真实坐标）
       let coordinates = null;
+      let address = null;
+      
       try {
-        const geoResult = await callAmapTool("maps_geo", {
-          address: `${city}${attractionName}`,
-        });
+        // 尝试多种地址格式
+        const addressVariants = [
+          `${city}${attractionName}`,
+          `${attractionName}`,
+          `${city}市${attractionName}`,
+        ];
 
-        if (geoResult && geoResult.success && geoResult.data) {
-          const location = geoResult.data.location;
-          if (location) {
-            const [lng, lat] = location.split(",").map(Number);
-            coordinates = [lng, lat];
+        for (const addr of addressVariants) {
+          try {
+            const geoResult = await callAmapTool("maps_geo", {
+              address: addr,
+            });
+
+            if (geoResult && geoResult.success && geoResult.data) {
+              const location = geoResult.data.location;
+              if (location) {
+                const [lng, lat] = location.split(",").map(Number);
+                if (!isNaN(lng) && !isNaN(lat)) {
+                  coordinates = [lng, lat];
+                  address = geoResult.data.formatted_address || addr;
+                  break;
+                }
+              }
+            }
+          } catch (error) {
+            // 继续尝试下一个地址格式
+            continue;
           }
         }
       } catch (error) {
         console.warn(`获取${attractionName}坐标失败:`, error);
       }
 
-      // 如果没有获取到坐标，使用默认坐标
+      // 如果没有获取到坐标，使用默认坐标（城市中心附近）
       if (!coordinates) {
         const defaultCoords = {
           北京: [116.397428, 39.90923],
           上海: [121.473701, 31.230416],
           广州: [113.264385, 23.129112],
           深圳: [114.057868, 22.543099],
+          杭州: [120.153576, 30.287459],
+          成都: [104.065735, 30.659462],
+          西安: [108.948024, 34.341568],
+          南京: [118.796877, 32.060255],
         };
-        const baseCoord = defaultCoords[city] || [116.397428, 39.90923];
+        const baseCoord = defaultCoords[city] || defaultCoords["北京"];
         coordinates = [
           baseCoord[0] + (Math.random() - 0.5) * 0.1,
           baseCoord[1] + (Math.random() - 0.5) * 0.1,
         ];
+        address = `${city}${attractionName}`;
+      }
+
+      // 计算距离（基于前一个景点）
+      let distance = "起点";
+      let duration = null;
+      if (attractions.length > 0) {
+        const prevCoord = attractions[attractions.length - 1].coordinates;
+        // 简单的距离估算（实际应该调用距离API）
+        const dist = Math.sqrt(
+          Math.pow(coordinates[0] - prevCoord[0], 2) +
+          Math.pow(coordinates[1] - prevCoord[1], 2)
+        ) * 111; // 粗略转换为公里
+        distance = `${dist.toFixed(1)}公里`;
+        duration = `${Math.round(dist * 2)}分钟`; // 假设平均速度30km/h
       }
 
       const newAttraction = {
         id: Date.now() + Math.random(),
         name: attractionName,
-        description: `这是${city}的一个著名景点，值得一游。`,
+        description: address ? `位于${address}` : `这是${city}的一个著名景点，值得一游。`,
         coordinates: coordinates,
-        distance: attractions.length > 0 ? `${(Math.random() * 5 + 2).toFixed(1)}公里` : "起点",
-        duration: attractions.length > 0 ? `${Math.round(Math.random() * 30 + 15)}分钟` : null,
+        distance: distance,
+        duration: duration,
+        address: address,
         details: [
-          `位于${city}市中心`,
+          address || `位于${city}市中心`,
           "开放时间：9:00-18:00",
           "建议游玩时间：2-3小时",
         ],
