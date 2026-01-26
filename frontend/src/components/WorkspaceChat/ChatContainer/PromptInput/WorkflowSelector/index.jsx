@@ -266,7 +266,7 @@ export default function WorkflowSelector({ queryText = "", onSelect, onRun }) {
             <p className="text-xs text-theme-text-secondary">选择工作流</p>
           </div>
 
-          <div className="max-h-[200px] overflow-y-auto">
+          <div className="max-h-[250px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-transparent hover:scrollbar-thumb-gray-400" style={{ scrollbarWidth: 'thin', scrollbarColor: '#6b7280 transparent' }}>
             {loading ? (
               <div className="p-4 text-center text-theme-text-secondary text-sm">
                 加载中...
