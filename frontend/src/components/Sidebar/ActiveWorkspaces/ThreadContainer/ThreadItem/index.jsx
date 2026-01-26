@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 const THREAD_CALLOUT_DETAIL_WIDTH = 26;
 export default function ThreadItem({
@@ -23,6 +24,7 @@ export default function ThreadItem({
   hasNext,
   ctrlPressed = false,
 }) {
+  const { t } = useTranslation();
   const { slug, threadSlug = null } = useParams();
   const optionsContainer = useRef(null);
   const [showOptions, setShowOptions] = useState(false);
@@ -70,7 +72,7 @@ export default function ThreadItem({
               <p
                 className={`text-left text-sm text-slate-400/50 light:text-slate-500 italic`}
               >
-                deleted thread
+                {t("thread.deleted")}
               </p>
             </div>
             {ctrlPressed && (
@@ -161,6 +163,7 @@ function OptionsMenu({
   close,
   currentThreadSlug,
 }) {
+  const { t } = useTranslation();
   const menuRef = useRef(null);
 
   // Ref menu options
@@ -197,7 +200,7 @@ function OptionsMenu({
 
   const renameThread = async () => {
     const name = window
-      .prompt("What would you like to rename this thread to?")
+      .prompt(t("thread.rename_prompt"))
       ?.trim();
     if (!name || name.length === 0) {
       close();
@@ -210,7 +213,7 @@ function OptionsMenu({
       { name }
     );
     if (!!message) {
-      showToast(`Thread could not be updated! ${message}`, "error", {
+      showToast(`${t("thread.could_not_update")} ${message}`, "error", {
         clear: true,
       });
       close();
@@ -223,18 +226,16 @@ function OptionsMenu({
 
   const handleDelete = async () => {
     if (
-      !window.confirm(
-        "Are you sure you want to delete this thread? All of its chats will be deleted. You cannot undo this."
-      )
+      !window.confirm(t("thread.delete_confirm"))
     )
       return;
     const success = await Workspace.threads.delete(workspace.slug, thread.slug);
     if (!success) {
-      showToast("Thread could not be deleted!", "error", { clear: true });
+      showToast(t("thread.could_not_delete"), "error", { clear: true });
       return;
     }
     if (success) {
-      showToast("Thread deleted successfully!", "success", { clear: true });
+      showToast(t("thread.deleted_success"), "success", { clear: true });
       onRemove(thread.id);
       // Redirect if deleting the active thread
       if (currentThreadSlug === thread.slug) {
@@ -255,7 +256,7 @@ function OptionsMenu({
         className="w-full rounded-md flex items-center p-2 gap-x-2 hover:bg-slate-500/20 text-slate-300 light:text-theme-text-primary"
       >
         <PencilSimple size={18} />
-        <p className="text-sm">Rename</p>
+        <p className="text-sm">{t("thread.rename")}</p>
       </button>
       <button
         onClick={handleDelete}
@@ -263,7 +264,7 @@ function OptionsMenu({
         className="w-full rounded-md flex items-center p-2 gap-x-2 hover:bg-red-500/20 text-slate-300 light:text-theme-text-primary hover:text-red-100"
       >
         <Trash size={18} />
-        <p className="text-sm">Delete Thread</p>
+        <p className="text-sm">{t("thread.delete")}</p>
       </button>
     </div>
   );
