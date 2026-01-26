@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { callAmapTool, getAmapMCPConfig } from "@/utils/mcp/amapTools";
-import { MapPin, Navigation, Clock, Star, X, ChevronRight } from "@phosphor-icons/react";
+import { MapPin, Navigation, Clock, Star, X, CaretRight } from "@phosphor-icons/react";
 
 // HUD风格地图组件（使用Mapbox GL JS）
 function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
@@ -265,7 +265,7 @@ function AttractionCard({ attraction, index, onClose, onNavigate }) {
           <div className="text-white/70 text-sm space-y-2">
             {attraction.details.map((detail, i) => (
               <div key={i} className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-cyan-400 mt-0.5 flex-shrink-0" />
+                <CaretRight className="w-4 h-4 text-cyan-400 mt-0.5 flex-shrink-0" />
                 <span>{detail}</span>
               </div>
             ))}
@@ -609,7 +609,7 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
             <div className="space-y-2">
               {selectedPoi.details?.map((detail, i) => (
                 <div key={i} className="flex items-start gap-2 text-white/70 text-sm">
-                  <ChevronRight className="w-4 h-4 text-cyan-400 mt-0.5" />
+                  <CaretRight className="w-4 h-4 text-cyan-400 mt-0.5" />
                   <span>{detail}</span>
                 </div>
               ))}
