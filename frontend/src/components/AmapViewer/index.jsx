@@ -163,6 +163,16 @@ export default function AmapViewer({
         routeRef.current = null;
       }
 
+      // 清理Loca实例
+      if (locaInstanceRef.current) {
+        try {
+          locaInstanceRef.current.destroy();
+        } catch (e) {
+          console.warn("清理Loca实例失败:", e);
+        }
+        locaInstanceRef.current = null;
+      }
+
       if (mapInstanceRef.current) {
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
