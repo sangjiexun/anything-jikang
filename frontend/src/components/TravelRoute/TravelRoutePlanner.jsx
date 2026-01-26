@@ -121,10 +121,25 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
           }
 
           // 调整视野以包含所有点
-          if (route.length > 0 || pois.length > 0) {
+          const validBounds = [];
+          if (route && route.length > 0) {
+            route.forEach((coord) => {
+              if (isValidCoordinate(coord)) {
+                validBounds.push(coord);
+              }
+            });
+          }
+          if (pois && pois.length > 0) {
+            pois.forEach((poi) => {
+              if (poi.coordinates && isValidCoordinate(poi.coordinates)) {
+                validBounds.push(poi.coordinates);
+              }
+            });
+          }
+          
+          if (validBounds.length > 0) {
             const bounds = new window.AMap.Bounds();
-            route.forEach((coord) => bounds.extend(coord));
-            pois.forEach((poi) => bounds.extend(poi.coordinates));
+            validBounds.forEach((coord) => bounds.extend(coord));
             map.setBounds(bounds);
           }
         });
@@ -201,11 +216,34 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
     };
   }, [center, zoom, route, pois, onPoiClick, apiKey]);
 
+  // 验证坐标是否有效
+  const isValidCoordinate = (coord) => {
+    if (!coord || !Array.isArray(coord) || coord.length < 2) return false;
+    const [lng, lat] = coord;
+    return (
+      typeof lng === "number" &&
+      typeof lat === "number" &&
+      !isNaN(lng) &&
+      !isNaN(lat) &&
+      lng >= -180 &&
+      lng <= 180 &&
+      lat >= -90 &&
+      lat <= 90
+    );
+  };
+
   // 绘制流动路线（使用Loca.js PulseLineLayer）
   const drawAnimatedRoute = (map, routeCoords) => {
     if (!window.Loca || !locaInstanceRef.current || !routeCoords || routeCoords.length < 2) return;
 
     try {
+      // 验证并过滤无效坐标
+      const validCoords = routeCoords.filter(isValidCoordinate);
+      if (validCoords.length < 2) {
+        console.warn("有效坐标点不足，无法绘制路线");
+        return;
+      }
+
       // 先清理旧的路线图层
       if (routeLayerRef.current && locaInstanceRef.current) {
         try {
@@ -224,7 +262,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
           type: "Feature",
           geometry: {
             type: "LineString",
-            coordinates: routeCoords,
+            coordinates: validCoords,
           },
         },
       });
@@ -253,7 +291,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
 
       // 同时绘制静态路线作为背景
       const staticPolyline = new window.AMap.Polyline({
-        path: routeCoords,
+        path: validCoords,
         strokeColor: "#00ff88",
         strokeWeight: 4,
         strokeOpacity: 0.8,
@@ -292,9 +330,17 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
       }
 
       pois.forEach((poi, index) => {
-        if (!poi.coordinates) return;
+        // 验证坐标有效性
+        if (!poi.coordinates || !isValidCoordinate(poi.coordinates)) {
+          console.warn(`景点 ${poi.name || index} 的坐标无效，已跳过`);
+          return;
+        }
 
         try {
+          // 确保坐标格式正确 [lng, lat]
+          const [lng, lat] = poi.coordinates;
+          const validPosition = [Number(lng), Number(lat)];
+
           // 创建科技感自定义图标
           const icon = new window.AMap.Icon({
             size: new window.AMap.Size(40, 40),
@@ -304,7 +350,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
 
           // 创建标记
           const marker = new window.AMap.Marker({
-            position: poi.coordinates,
+            position: validPosition,
             icon: icon,
             title: poi.name,
             zIndex: 100 + index,
@@ -382,35 +428,45 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
   const showHoverCard = (map, poi, marker) => {
     if (!map || !marker || hoverInfoRef.current) return;
 
-    const content = `
-      <div style="
-        background: linear-gradient(135deg, rgba(0, 51, 102, 0.95), rgba(51, 0, 102, 0.95));
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(0, 255, 136, 0.3);
-        border-radius: 12px;
-        padding: 12px;
-        min-width: 200px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-      ">
+    try {
+      const position = marker.getPosition();
+      if (!position || !isValidCoordinate([position.lng, position.lat])) {
+        console.warn("标记位置无效，无法显示悬停卡片");
+        return;
+      }
+
+      const content = `
         <div style="
-          color: #00ff88;
-          font-size: 16px;
-          font-weight: bold;
-          margin-bottom: 8px;
-        ">${poi.name || "景点"}</div>
-        ${poi.description ? `<div style="color: rgba(255, 255, 255, 0.8); font-size: 12px; margin-top: 4px;">${poi.description}</div>` : ""}
-        ${poi.distance ? `<div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; margin-top: 6px;">📍 ${poi.distance}</div>` : ""}
-      </div>
-    `;
+          background: linear-gradient(135deg, rgba(0, 51, 102, 0.95), rgba(51, 0, 102, 0.95));
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(0, 255, 136, 0.3);
+          border-radius: 12px;
+          padding: 12px;
+          min-width: 200px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        ">
+          <div style="
+            color: #00ff88;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+          ">${poi.name || "景点"}</div>
+          ${poi.description ? `<div style="color: rgba(255, 255, 255, 0.8); font-size: 12px; margin-top: 4px;">${poi.description}</div>` : ""}
+          ${poi.distance ? `<div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; margin-top: 6px;">📍 ${poi.distance}</div>` : ""}
+        </div>
+      `;
 
-    const infoWindow = new window.AMap.InfoWindow({
-      content: content,
-      offset: new window.AMap.Pixel(0, -40),
-      closeWhenClickMap: false,
-    });
+      const infoWindow = new window.AMap.InfoWindow({
+        content: content,
+        offset: new window.AMap.Pixel(0, -40),
+        closeWhenClickMap: false,
+      });
 
-    infoWindow.open(map, marker.getPosition());
-    hoverInfoRef.current = infoWindow;
+      infoWindow.open(map, position);
+      hoverInfoRef.current = infoWindow;
+    } catch (error) {
+      console.warn("显示悬停卡片失败:", error);
+    }
   };
 
   // 隐藏悬停卡片
@@ -643,17 +699,17 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
               address: addr,
             });
 
-            if (geoResult && geoResult.success && geoResult.data) {
-              const location = geoResult.data.location;
-              if (location) {
-                const [lng, lat] = location.split(",").map(Number);
-                if (!isNaN(lng) && !isNaN(lat)) {
-                  coordinates = [lng, lat];
-                  address = geoResult.data.formatted_address || addr;
-                  break;
-                }
-              }
+        if (geoResult && geoResult.success && geoResult.data) {
+          const location = geoResult.data.location;
+          if (location) {
+            const [lng, lat] = location.split(",").map(Number);
+            if (!isNaN(lng) && !isNaN(lat) && lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
+              coordinates = [lng, lat];
+              address = geoResult.data.formatted_address || addr;
+              break;
             }
+          }
+        }
           } catch (error) {
             // 继续尝试下一个地址格式
             continue;
@@ -676,11 +732,23 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
           南京: [118.796877, 32.060255],
         };
         const baseCoord = defaultCoords[city] || defaultCoords["北京"];
+        const offsetLng = (Math.random() - 0.5) * 0.1;
+        const offsetLat = (Math.random() - 0.5) * 0.1;
         coordinates = [
-          baseCoord[0] + (Math.random() - 0.5) * 0.1,
-          baseCoord[1] + (Math.random() - 0.5) * 0.1,
+          Number((baseCoord[0] + offsetLng).toFixed(6)),
+          Number((baseCoord[1] + offsetLat).toFixed(6)),
         ];
+        // 再次验证坐标
+        if (!isValidCoordinate(coordinates)) {
+          coordinates = baseCoord; // 如果无效，使用原始坐标
+        }
         address = `${city}${attractionName}`;
+      }
+
+      // 最终验证坐标
+      if (!isValidCoordinate(coordinates)) {
+        console.error(`无法为景点 ${attractionName} 获取有效坐标`);
+        return;
       }
 
       // 计算距离（基于前一个景点）
@@ -715,10 +783,14 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
       setAttractions((prev) => {
         const updated = [...prev, newAttraction];
         
-        // 更新路线
+        // 更新路线（只包含有效坐标）
         if (updated.length > 1) {
-          const routeCoords = updated.map((a) => a.coordinates);
-          setRoute(routeCoords);
+          const routeCoords = updated
+            .map((a) => a.coordinates)
+            .filter((coord) => coord && isValidCoordinate(coord));
+          if (routeCoords.length >= 2) {
+            setRoute(routeCoords);
+          }
         }
         
         return updated;
