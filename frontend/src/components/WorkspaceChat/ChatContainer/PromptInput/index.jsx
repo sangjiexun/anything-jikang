@@ -452,6 +452,7 @@ export default function PromptInput({
                   setShowAgents={setShowAgents}
                 />
                 <WorkflowSelector
+                  queryText={promptInput}
                   onSelect={(workflow) => {
                     if (workflow) {
                       console.log("Selected workflow:", workflow);
@@ -459,7 +460,9 @@ export default function PromptInput({
                   }}
                   onRun={(result) => {
                     if (result?.results) {
-                      sendCommand(`工作流执行结果: ${JSON.stringify(result.results)}`);
+                      sendCommand(`工作流执行结果: ${result.results}`);
+                      // 清空输入框
+                      setPromptInput("");
                     }
                   }}
                 />

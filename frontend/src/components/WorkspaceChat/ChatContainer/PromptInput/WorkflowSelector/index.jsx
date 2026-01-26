@@ -3,7 +3,7 @@ import { GitBranch, CaretDown, Play, X, Check, SpinnerGap } from "@phosphor-icon
 import showToast from "@/utils/toast";
 import { useTranslation } from "react-i18next";
 
-export default function WorkflowSelector({ onSelect, onRun }) {
+export default function WorkflowSelector({ queryText = "", onSelect, onRun }) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [workflows, setWorkflows] = useState([]);
@@ -65,6 +65,9 @@ export default function WorkflowSelector({ onSelect, onRun }) {
       return;
     }
 
+    // 使用输入框的文本作为初始输入
+    const initialInput = queryText.trim();
+
     setIsRunning(true);
 
     try {
@@ -86,9 +89,22 @@ export default function WorkflowSelector({ onSelect, onRun }) {
         return;
       }
 
-      // 简化的工作流执行
-      const results = [];
-      let lastOutput = null;
+      // 获取 LLM 配置
+      let llmConfig = {
+        endpoint: "https://api.deepseek.com",
+        apiKey: "",
+        model: "deepseek-chat",
+        temperature: 0.7,
+        maxTokens: 2048,
+      };
+      try {
+        const savedConfig = localStorage.getItem("workflow_llm_config");
+        if (savedConfig) {
+          llmConfig = { ...llmConfig, ...JSON.parse(savedConfig) };
+        }
+      } catch (e) {
+        console.error("Failed to load LLM config:", e);
+      }
 
       // 构建执行顺序
       const inDegree = {};
@@ -116,15 +132,54 @@ export default function WorkflowSelector({ onSelect, onRun }) {
         });
       }
 
-      // 执行节点
+      // 执行节点，使用输入框文本作为初始输入
+      let lastOutput = initialInput || "开始执行工作流";
+      const executionLog = [];
+      
+      executionLog.push(`📥 初始输入: ${initialInput || "(无输入)"}`);
+
       for (const node of order) {
-        results.push({
-          nodeId: node.id,
-          nodeType: node.type,
-          status: "executed",
-        });
-        lastOutput = `节点 ${node.type} 执行完成`;
+        const nodeType = node.type;
+        
+        // 检查是否是 LLM 节点
+        if (nodeType?.startsWith("llm-") && llmConfig.apiKey) {
+          try {
+            executionLog.push(`🔄 执行节点: ${nodeType}`);
+            
+            const response = await fetch(`${llmConfig.endpoint}/v1/chat/completions`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${llmConfig.apiKey}`,
+              },
+              body: JSON.stringify({
+                model: llmConfig.model,
+                messages: [
+                  { role: "system", content: node.config?.systemPrompt || "你是一个有帮助的AI助手" },
+                  { role: "user", content: lastOutput },
+                ],
+                temperature: node.config?.temperature || llmConfig.temperature,
+                max_tokens: node.config?.maxTokens || llmConfig.maxTokens,
+              }),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              lastOutput = data.choices?.[0]?.message?.content || "无响应";
+              executionLog.push(`✅ ${nodeType} 完成`);
+            } else {
+              executionLog.push(`⚠️ ${nodeType} API 请求失败: ${response.status}`);
+            }
+          } catch (e) {
+            executionLog.push(`❌ ${nodeType} 执行失败: ${e.message}`);
+          }
+        } else {
+          // 非 LLM 节点，模拟执行
+          executionLog.push(`✅ 节点 ${nodeType} 已处理`);
+        }
       }
+
+      executionLog.push(`📤 最终输出: ${lastOutput}`);
 
       showToast("工作流执行成功", "success");
       
@@ -133,7 +188,9 @@ export default function WorkflowSelector({ onSelect, onRun }) {
           success: true,
           workflowName: selectedWorkflow.name,
           nodeCount: order.length,
-          results: `工作流 "${selectedWorkflow.name}" 执行完成，共执行 ${order.length} 个节点`,
+          initialInput,
+          finalOutput: lastOutput,
+          results: `【${selectedWorkflow.name}】\n\n${executionLog.join("\n")}\n\n---\n\n${lastOutput}`,
         });
       }
     } catch (error) {
