@@ -95,6 +95,39 @@ function mcpServersEndpoints(app) {
       }
     }
   );
+
+  app.post(
+    "/mcp-servers/update",
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (request, response) => {
+      try {
+        const { name, serverConfig } = reqBody(request);
+        if (!name || !serverConfig) {
+          return response.status(400).json({
+            success: false,
+            error: "Name and serverConfig are required",
+          });
+        }
+
+        const mcp = new MCPCompatibilityLayer();
+        const result = mcp.addOrUpdateMCPServerInConfig(name, serverConfig);
+        
+        // Reload MCP servers to apply changes
+        await mcp.reloadMCPServers();
+        
+        return response.status(200).json({
+          success: result,
+          error: null,
+        });
+      } catch (error) {
+        console.error("Error updating MCP server:", error);
+        return response.status(500).json({
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+  );
 }
 
 module.exports = { mcpServersEndpoints };

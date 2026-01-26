@@ -131,6 +131,42 @@ class MCPHypervisor {
   }
 
   /**
+   * Add or update an MCP server in the config file
+   * @param {string} name - The name of the MCP server
+   * @param {Object} serverConfig - The server configuration
+   * @returns {boolean} - True if the MCP server was added/updated, false otherwise
+   */
+  addOrUpdateMCPServerInConfig(name, serverConfig) {
+    const servers = safeJsonParse(
+      fs.readFileSync(this.mcpServerJSONPath, "utf8"),
+      { mcpServers: {} }
+    );
+
+    // Merge with existing config if it exists
+    if (servers.mcpServers[name]) {
+      servers.mcpServers[name] = {
+        ...servers.mcpServers[name],
+        ...serverConfig,
+        // Preserve env variables and merge them
+        env: {
+          ...(servers.mcpServers[name].env || {}),
+          ...(serverConfig.env || {}),
+        },
+      };
+    } else {
+      servers.mcpServers[name] = serverConfig;
+    }
+
+    fs.writeFileSync(
+      this.mcpServerJSONPath,
+      JSON.stringify(servers, null, 2),
+      "utf8"
+    );
+    this.log(`MCP server ${name} added/updated in config file`);
+    return true;
+  }
+
+  /**
    * Reload the MCP servers - can be used to reload the MCP servers without restarting the server or app
    * and will also apply changes to the config file if any where made.
    */

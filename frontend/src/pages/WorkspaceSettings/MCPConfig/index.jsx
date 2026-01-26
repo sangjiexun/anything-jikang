@@ -191,7 +191,7 @@ export default function MCPConfig({ workspace }) {
     setShowAddMenu(false);
   };
 
-  const addManualServer = (serverConfig) => {
+  const addManualServer = async (serverConfig) => {
     const newServer = {
       id: `manual_${Date.now()}`,
       name: serverConfig.name,
@@ -200,13 +200,98 @@ export default function MCPConfig({ workspace }) {
       type: "manual",
       config: serverConfig,
     };
+
+    // 如果配置包含API Key，保存到后端
+    if (serverConfig.apiKey || serverConfig.webApiKey) {
+      try {
+        const backendConfig = {
+          command: serverConfig.command || "npx",
+          args: serverConfig.args 
+            ? (Array.isArray(serverConfig.args) 
+                ? serverConfig.args 
+                : serverConfig.args.split(" "))
+            : [],
+          env: {
+            ...(serverConfig.apiKey ? { 
+              AMAP_MAPS_API_KEY: serverConfig.apiKey,
+              API_KEY: serverConfig.apiKey 
+            } : {}),
+            ...(serverConfig.webApiKey ? { 
+              AMAP_WEB_API_KEY: serverConfig.webApiKey,
+              WEB_API_KEY: serverConfig.webApiKey 
+            } : {}),
+          },
+        };
+
+        const MCPServers = (await import("@/models/mcpServers")).default;
+        const result = await MCPServers.updateServer(serverConfig.name, backendConfig);
+        
+        if (result.success) {
+          showToast("MCP 服务器已添加并保存到后端", "success");
+        } else {
+          showToast("后端保存失败: " + (result.error || "未知错误"), "warning");
+        }
+      } catch (error) {
+        console.error("Failed to save MCP config to backend:", error);
+        showToast("后端保存失败: " + error.message, "error");
+      }
+    }
+
     const newServers = [...servers, newServer];
     saveServers(newServers);
     setShowManualModal(false);
     showToast("MCP 服务器已添加", "success");
   };
 
-  const updateServer = (serverId, updates) => {
+  const updateServer = async (serverId, updates) => {
+    const server = servers.find((s) => s.id === serverId);
+    if (!server) return;
+
+    // 如果配置包含API Key，保存到后端
+    if (updates.config && (updates.config.apiKey || updates.config.webApiKey)) {
+      try {
+        // 构建后端MCP服务器配置格式
+        const backendConfig = {
+          command: updates.config.command || server.config?.command || "npx",
+          args: updates.config.args 
+            ? (Array.isArray(updates.config.args) 
+                ? updates.config.args 
+                : updates.config.args.split(" "))
+            : (server.config?.args 
+                ? (Array.isArray(server.config.args) 
+                    ? server.config.args 
+                    : server.config.args.split(" "))
+                : []),
+          env: {
+            ...(server.config?.env || {}),
+            // 将API Key添加到环境变量中
+            ...(updates.config.apiKey ? { 
+              AMAP_MAPS_API_KEY: updates.config.apiKey,
+              API_KEY: updates.config.apiKey 
+            } : {}),
+            ...(updates.config.webApiKey ? { 
+              AMAP_WEB_API_KEY: updates.config.webApiKey,
+              WEB_API_KEY: updates.config.webApiKey 
+            } : {}),
+          },
+        };
+
+        // 调用后端API保存配置
+        const MCPServers = (await import("@/models/mcpServers")).default;
+        const result = await MCPServers.updateServer(server.name, backendConfig);
+        
+        if (result.success) {
+          showToast("配置已保存到后端", "success");
+        } else {
+          showToast("后端保存失败: " + (result.error || "未知错误"), "warning");
+        }
+      } catch (error) {
+        console.error("Failed to save MCP config to backend:", error);
+        showToast("后端保存失败: " + error.message, "error");
+      }
+    }
+
+    // 同时更新本地存储
     const newServers = servers.map((s) =>
       s.id === serverId ? { ...s, ...updates } : s
     );
@@ -469,6 +554,8 @@ function ManualAddModal({ onClose, onAdd }) {
   const [name, setName] = useState("");
   const [command, setCommand] = useState("");
   const [args, setArgs] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [webApiKey, setWebApiKey] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -480,6 +567,8 @@ function ManualAddModal({ onClose, onAdd }) {
       name: name.trim(),
       command: command.trim(),
       args: args.trim(),
+      apiKey: apiKey.trim(),
+      webApiKey: webApiKey.trim(),
     });
   };
 
@@ -528,6 +617,38 @@ function ManualAddModal({ onClose, onAdd }) {
               placeholder="例如: -y @anthropic/mcp-server-name"
               className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm text-white/60 mb-2">
+              API Key (可选)
+            </label>
+            <input
+              type="text"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="例如: 671a340b83a6c56c1ac80779984ab086"
+              className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+            />
+            <p className="text-xs text-white/40 mt-1">
+              用于后端 API 调用的密钥
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm text-white/60 mb-2">
+              Web API Key (可选)
+            </label>
+            <input
+              type="text"
+              value={webApiKey}
+              onChange={(e) => setWebApiKey(e.target.value)}
+              placeholder="例如: 671a340b83a6c56c1ac80779984ab086"
+              className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+            />
+            <p className="text-xs text-white/40 mt-1">
+              用于前端显示的密钥（某些服务需要单独的 Web 端 Key）
+            </p>
           </div>
 
           <div className="text-sm text-white/40">

@@ -71,6 +71,25 @@ const MCPServers = {
         error: e.message,
       }));
   },
+
+  /**
+   * Update or add an MCP server configuration
+   * @param {string} name - The name of the MCP server
+   * @param {Object} serverConfig - The server configuration including API keys
+   * @returns {Promise<{success: boolean, error: string | null}>}
+   */
+  updateServer: async (name, serverConfig) => {
+    return await fetch(`${API_BASE}/mcp-servers/update`, {
+      method: "POST",
+      headers: baseHeaders(),
+      body: JSON.stringify({ name, serverConfig }),
+    })
+      .then((res) => res.json())
+      .catch((e) => ({
+        success: false,
+        error: e.message,
+      }));
+  },
 };
 
 export default MCPServers;
