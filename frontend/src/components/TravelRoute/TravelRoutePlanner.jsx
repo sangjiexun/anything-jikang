@@ -18,7 +18,7 @@ const isValidCoordinate = (coord) => {
   );
 };
 
-// HUD风格地图组件（使用MapLibre GL JS - 2025最新开源地图框架）
+// 黑客风格HUD全息地图组件（使用ArcGIS开源底图 + MapLibre GL JS）
 function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -26,13 +26,14 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
   const routeSourceRef = useRef(null);
   const animationFrameRef = useRef(null);
   const hoverInfoRef = useRef(null);
+  const scanlineRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [hoveredPoi, setHoveredPoi] = useState(null);
 
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // 加载MapLibre GL JS（2025最新版本 v5.16.0）
+    // 加载MapLibre GL JS（用于渲染ArcGIS底图）
     const loadMapLibre = () => {
       return new Promise((resolve, reject) => {
         // 检查是否已加载
@@ -66,54 +67,102 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
       .then(() => {
         if (!window.maplibregl || !mapRef.current) return;
 
-        // 初始化地图 - HUD风格（深色主题，3D视角）
+        // 初始化地图 - 黑客风格HUD全息（使用ArcGIS开源底图）
         const map = new window.maplibregl.Map({
           container: mapRef.current,
           style: {
             version: 8,
             sources: {
-              "raster-tiles": {
+              "arcgis-osm": {
                 type: "raster",
                 tiles: [
-                  "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  "https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/tile/{z}/{y}/{x}.pbf"
+                ],
+                tileSize: 512,
+                attribution: "© Esri, OpenStreetMap contributors"
+              },
+              // 备用：ArcGIS静态瓦片服务（开源OSM风格）
+              "arcgis-static": {
+                type: "raster",
+                tiles: [
+                  "https://basemaps.arcgis.com/v1/arcgis/rest/services/World_Basemap/MapServer/tile/{z}/{y}/{x}"
                 ],
                 tileSize: 256,
-                attribution: "© OpenStreetMap contributors"
+                attribution: "© Esri"
               }
             },
             layers: [
               {
-                id: "simple-tiles",
+                id: "arcgis-base",
                 type: "raster",
-                source: "raster-tiles",
+                source: "arcgis-static",
                 minzoom: 0,
-                maxzoom: 22
+                maxzoom: 19
               }
             ],
             glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
           },
           center: center || [116.397428, 39.90923],
           zoom: zoom,
-          pitch: 45, // 3D俯仰角（Hue风格使用较小的角度）
-          bearing: 0, // 旋转角度
+          pitch: 60, // 3D俯仰角（黑客风格）
+          bearing: -15, // 旋转角度
         });
 
-        // 添加Hue风格滤镜（柔和配色）
+        // 添加黑客风格HUD全息效果（蓝色和黄色基调）
         map.on("load", () => {
-          // 添加Hue风格滤镜图层（柔和的低饱和度配色）
+          // 添加深色背景（黑客风格）
           map.addLayer({
-            id: "hue-filter",
+            id: "hud-background",
             type: "background",
             paint: {
-              "background-color": "#f5f5f0", // 柔和的米白色背景
-              "background-opacity": 0.4
+              "background-color": "#0a0a1a", // 深蓝黑色背景
+              "background-opacity": 0.8
             }
           });
 
-          // 添加颜色调整层（使用CSS滤镜效果实现Hue风格）
+          // 添加网格线效果（HUD全息网格）
+          map.addLayer({
+            id: "hud-grid",
+            type: "line",
+            source: {
+              type: "geojson",
+              data: {
+                type: "FeatureCollection",
+                features: []
+              }
+            },
+            paint: {
+              "line-color": "#00ffff", // 青色网格线
+              "line-width": 0.5,
+              "line-opacity": 0.3
+            }
+          });
+
+          // 添加扫描线动画效果（使用CSS）
           const filterContainer = mapRef.current;
           if (filterContainer) {
-            filterContainer.style.filter = "saturate(0.3) brightness(1.1) contrast(0.9)";
+            filterContainer.style.filter = "contrast(1.2) brightness(0.9)";
+            filterContainer.style.position = "relative";
+            
+            // 创建扫描线效果
+            const scanline = document.createElement("div");
+            scanline.className = "hud-scanline";
+            scanline.style.cssText = `
+              position: absolute;
+              top: 0;
+              left: 0;
+              right: 0;
+              height: 2px;
+              background: linear-gradient(to bottom, 
+                transparent 0%, 
+                rgba(0, 255, 255, 0.5) 50%, 
+                transparent 100%);
+              animation: scanline 3s linear infinite;
+              pointer-events: none;
+              z-index: 1000;
+            `;
+            filterContainer.appendChild(scanline);
+            scanlineRef.current = scanline;
           }
 
           setMapLoaded(true);
@@ -285,7 +334,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
         data: geojson,
       });
 
-      // 绘制静态路线作为背景（Hue风格 - 柔和的蓝绿色）
+      // 绘制静态路线作为背景（黑客风格 - 蓝色和黄色基调）
       map.addLayer({
         id: "route-static",
         type: "line",
@@ -295,9 +344,10 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
           "line-cap": "round",
         },
         paint: {
-          "line-color": "#7fb3d3", // 柔和的蓝绿色
-          "line-width": 4,
-          "line-opacity": 0.7,
+          "line-color": "#00ffff", // 青色路线（蓝色基调）
+          "line-width": 5,
+          "line-opacity": 0.8,
+          "line-dasharray": [2, 2], // 虚线效果
         },
       });
 
@@ -348,9 +398,10 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
                 "line-cap": "round",
               },
               paint: {
-                "line-color": "#a8d5e2", // Hue风格 - 柔和的青色
-                "line-width": 6,
-                "line-opacity": 0.85,
+                "line-color": "#ffff00", // 黄色流动线（黄色基调）
+                "line-width": 7,
+                "line-opacity": 0.9,
+                "line-dasharray": [4, 2], // 流动虚线效果
               },
             });
           }
@@ -446,60 +497,75 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
     }
   };
 
-  // 创建Hue风格标记图标（使用Canvas绘制 - 柔和配色）
+  // 创建黑客风格HUD全息标记图标（使用Canvas绘制 - 蓝色和黄色基调）
   const createTechMarkerIcon = (poi, index) => {
     const canvas = document.createElement("canvas");
-    canvas.width = 40;
-    canvas.height = 40;
+    canvas.width = 50;
+    canvas.height = 50;
     const ctx = canvas.getContext("2d");
 
     // 判断是否为关键位置（从坐标直接创建的）
     const isKeyLocation = poi.isKeyLocation;
 
-    // 绘制外圈（柔和的发光效果 - Hue风格）
-    const gradient = ctx.createRadialGradient(20, 20, 0, 20, 20, 20);
+    // 绘制外圈（黑客风格发光效果 - 蓝色和黄色）
+    const gradient = ctx.createRadialGradient(25, 25, 0, 25, 25, 25);
     if (isKeyLocation) {
-      // 关键位置使用柔和的橙色
-      gradient.addColorStop(0, "rgba(255, 183, 77, 0.6)");
-      gradient.addColorStop(0.5, "rgba(255, 224, 178, 0.3)");
-      gradient.addColorStop(1, "rgba(255, 183, 77, 0)");
+      // 关键位置使用黄色基调
+      gradient.addColorStop(0, "rgba(255, 255, 0, 0.8)");
+      gradient.addColorStop(0.5, "rgba(255, 255, 0, 0.4)");
+      gradient.addColorStop(1, "rgba(255, 255, 0, 0)");
     } else {
-      // 普通景点使用柔和的蓝绿色
-      gradient.addColorStop(0, "rgba(127, 179, 211, 0.6)");
-      gradient.addColorStop(0.5, "rgba(168, 213, 226, 0.3)");
-      gradient.addColorStop(1, "rgba(127, 179, 211, 0)");
+      // 普通景点使用蓝色基调
+      gradient.addColorStop(0, "rgba(0, 255, 255, 0.8)");
+      gradient.addColorStop(0.5, "rgba(0, 255, 255, 0.4)");
+      gradient.addColorStop(1, "rgba(0, 255, 255, 0)");
     }
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(20, 20, 20, 0, Math.PI * 2);
+    ctx.arc(25, 25, 25, 0, Math.PI * 2);
     ctx.fill();
 
-    // 绘制内圈（Hue风格 - 柔和配色）
+    // 绘制内圈（黑客风格 - 蓝色和黄色）
     if (isKeyLocation) {
-      ctx.fillStyle = "#ffb74d"; // 柔和的橙色
+      ctx.fillStyle = "#ffff00"; // 黄色
     } else {
-      ctx.fillStyle = "#7fb3d3"; // 柔和的蓝绿色
+      ctx.fillStyle = "#00ffff"; // 青色（蓝色基调）
     }
     ctx.beginPath();
-    ctx.arc(20, 20, 12, 0, Math.PI * 2);
+    ctx.arc(25, 25, 15, 0, Math.PI * 2);
     ctx.fill();
 
-    // 绘制中心点
+    // 绘制HUD风格边框（全息效果）
+    ctx.strokeStyle = isKeyLocation ? "#ffff00" : "#00ffff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(25, 25, 15, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 绘制中心点（全息效果）
     ctx.fillStyle = "#ffffff";
     ctx.beginPath();
-    ctx.arc(20, 20, 6, 0, Math.PI * 2);
+    ctx.arc(25, 25, 7, 0, Math.PI * 2);
     ctx.fill();
 
-    // 绘制编号或关键位置标识
-    ctx.fillStyle = "#333333"; // 柔和的深灰色文字
-    ctx.font = "bold 14px Arial";
+    // 绘制编号或关键位置标识（黑客风格字体）
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 16px 'Courier New', monospace"; // 等宽字体（黑客风格）
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     if (isKeyLocation) {
-      ctx.fillText("★", 20, 20); // 关键位置显示星号
+      ctx.fillText("★", 25, 25); // 关键位置显示星号
     } else {
-      ctx.fillText(String(index + 1), 20, 20);
+      ctx.fillText(String(index + 1), 25, 25);
     }
+
+    // 添加全息扫描线效果
+    const scanGradient = ctx.createLinearGradient(0, 0, 0, 50);
+    scanGradient.addColorStop(0, "rgba(0, 255, 255, 0)");
+    scanGradient.addColorStop(0.5, "rgba(0, 255, 255, 0.3)");
+    scanGradient.addColorStop(1, "rgba(0, 255, 255, 0)");
+    ctx.fillStyle = scanGradient;
+    ctx.fillRect(0, 0, 50, 50);
 
     return canvas.toDataURL();
   };
@@ -516,22 +582,27 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
 
       const content = `
         <div style="
-          background: linear-gradient(135deg, rgba(0, 51, 102, 0.95), rgba(51, 0, 102, 0.95));
+          background: linear-gradient(135deg, rgba(0, 10, 20, 0.95), rgba(10, 0, 20, 0.95));
           backdrop-filter: blur(10px);
-          border: 1px solid rgba(0, 255, 136, 0.3);
-          border-radius: 12px;
+          border: 2px solid;
+          border-image: linear-gradient(45deg, #00ffff, #ffff00) 1;
+          border-radius: 8px;
           padding: 12px;
-          min-width: 200px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+          min-width: 220px;
+          box-shadow: 
+            0 0 20px rgba(0, 255, 255, 0.5),
+            inset 0 0 10px rgba(0, 255, 255, 0.1);
+          font-family: 'Courier New', monospace;
         ">
           <div style="
-            color: #00ff88;
+            color: #00ffff;
             font-size: 16px;
             font-weight: bold;
             margin-bottom: 8px;
-          ">${poi.name || "景点"}</div>
-          ${poi.description ? `<div style="color: rgba(255, 255, 255, 0.8); font-size: 12px; margin-top: 4px;">${poi.description}</div>` : ""}
-          ${poi.distance ? `<div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; margin-top: 6px;">📍 ${poi.distance}</div>` : ""}
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+          ">${poi.name || "坐标点"}</div>
+          ${poi.description ? `<div style="color: rgba(255, 255, 255, 0.9); font-size: 12px; margin-top: 4px; font-family: 'Courier New', monospace;">${poi.description}</div>` : ""}
+          ${poi.distance ? `<div style="color: #ffff00; font-size: 11px; margin-top: 6px; font-family: 'Courier New', monospace;">📍 ${poi.distance}</div>` : ""}
         </div>
       `;
 
@@ -562,13 +633,35 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
     <div
       ref={mapRef}
       className="w-full h-full rounded-lg overflow-hidden relative"
-      style={{ minHeight: "400px" }}
+      style={{ 
+        minHeight: "400px",
+        position: "relative",
+      }}
     >
+      {/* HUD全息网格覆盖层 */}
+      <div className="hud-grid-overlay" />
+      
+      {/* HUD边框效果 */}
+      <div className="hud-border" />
+      
       {!mapLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-10">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-10">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-400 mx-auto mb-4"></div>
-            <p className="text-cyan-300">正在加载地图...</p>
+            <div 
+              className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mx-auto mb-4"
+              style={{
+                borderTopColor: "#00ffff",
+                borderBottomColor: "#ffff00",
+              }}
+            ></div>
+            <p 
+              className="text-cyan-300 font-mono"
+              style={{
+                textShadow: "0 0 10px rgba(0, 255, 255, 0.8)",
+              }}
+            >
+              正在加载ArcGIS地图...
+            </p>
           </div>
         </div>
       )}
