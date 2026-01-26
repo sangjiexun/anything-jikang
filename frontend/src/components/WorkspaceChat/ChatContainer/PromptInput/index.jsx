@@ -15,6 +15,7 @@ import SpeechToText from "./SpeechToText";
 import { Tooltip } from "react-tooltip";
 import AttachmentManager from "./Attachments";
 import AttachItem from "./AttachItem";
+import WorkflowSelector from "./WorkflowSelector";
 import {
   ATTACHMENTS_PROCESSED_EVENT,
   ATTACHMENTS_PROCESSING_EVENT,
@@ -449,6 +450,18 @@ export default function PromptInput({
                 <AvailableAgentsButton
                   showing={showAgents}
                   setShowAgents={setShowAgents}
+                />
+                <WorkflowSelector
+                  onSelect={(workflow) => {
+                    if (workflow) {
+                      console.log("Selected workflow:", workflow);
+                    }
+                  }}
+                  onRun={(result) => {
+                    if (result?.results) {
+                      sendCommand(`工作流执行结果: ${JSON.stringify(result.results)}`);
+                    }
+                  }}
                 />
                 <TextSizeButton />
               </div>
