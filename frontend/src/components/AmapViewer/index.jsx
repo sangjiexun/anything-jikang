@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { getAmapMCPConfig } from "@/utils/mcp/amapTools";
 
 export default function AmapViewer({
   apiKey,
@@ -8,7 +9,7 @@ export default function AmapViewer({
   routeData = null,
   pois = [],
   markers = [],
-  trajectoryData = null, // 轨迹数据：{ datasetId, terminalId, webServiceKey }
+  trajectoryData = null, // 轨迹数据：{ datasetId, terminalId }，webServiceKey将从MCP配置中获取
 }) {
   const mapRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -295,8 +296,17 @@ export default function AmapViewer({
 
   // 绘制轨迹（使用Loca.js PulseLineLayer）
   const drawTrajectory = async (map, trajectoryData) => {
-    if (!window.Loca || !window.jQuery || !trajectoryData.datasetId || !trajectoryData.webServiceKey) {
-      console.warn("轨迹可视化需要Loca.js、jQuery和完整的轨迹数据");
+    if (!window.Loca || !window.jQuery || !trajectoryData.datasetId) {
+      console.warn("轨迹可视化需要Loca.js、jQuery和数据集ID");
+      return;
+    }
+
+    // 从MCP配置中获取Web服务Key
+    const mcpConfig = getAmapMCPConfig();
+    const webServiceKey = trajectoryData.webServiceKey || mcpConfig?.apiKey;
+    
+    if (!webServiceKey) {
+      console.warn("未找到Web服务Key，请确保在MCP配置中设置了API Key");
       return;
     }
 
@@ -325,14 +335,15 @@ export default function AmapViewer({
       // 调用GeoHUB API获取轨迹点
       // 注意：properties参数需要是JSON字符串，但不需要双重编码
       const propertiesStr = JSON.stringify(propertiesFilter);
-      const url = `https://restapi.amap.com/rest/lbs/geohub/place/properties?key=${encodeURIComponent(trajectoryData.webServiceKey)}&dataset_id=${encodeURIComponent(trajectoryData.datasetId)}&properties=${encodeURIComponent(propertiesStr)}&offset=300`;
+      const url = `https://restapi.amap.com/rest/lbs/geohub/place/properties?key=${encodeURIComponent(webServiceKey)}&dataset_id=${encodeURIComponent(trajectoryData.datasetId)}&properties=${encodeURIComponent(propertiesStr)}&offset=300`;
 
       console.log("调用GeoHUB API:", url);
       console.log("参数详情:", {
-        key: trajectoryData.webServiceKey,
+        key: webServiceKey ? "已从MCP配置获取" : "缺失",
         dataset_id: trajectoryData.datasetId,
         properties: propertiesStr,
         offset: 300,
+        mcpConfig: mcpConfig ? "已加载" : "未找到",
       });
 
       window.jQuery.ajax({
@@ -348,9 +359,10 @@ export default function AmapViewer({
             console.error("GeoHUB API错误:", res.info || res.message, "错误码:", res.infocode);
             if (res.info === "INVALID_PARAMS" || res.infocode === "20000") {
               console.error("参数错误详情:", {
-                key: trajectoryData.webServiceKey ? "已提供" : "缺失",
+                key: webServiceKey ? "已从MCP配置获取" : "缺失（请检查MCP配置中的API Key）",
                 dataset_id: trajectoryData.datasetId ? "已提供" : "缺失",
                 properties: propertiesStr,
+                mcpConfigAvailable: mcpConfig ? "是" : "否",
               });
             }
             return;
@@ -437,10 +449,11 @@ export default function AmapViewer({
             const errorData = JSON.parse(jqXHR.responseText);
             if (errorData.status === "0" && errorData.info === "INVALID_PARAMS") {
               console.error("参数错误，请检查：");
-              console.error("1. API Key是否正确（Web服务Key）");
+              console.error("1. MCP配置中的API Key是否正确（Web服务Key）");
               console.error("2. 数据集ID是否存在");
               console.error("3. 属性字段名称是否正确（terminalId）");
               console.error("4. API Key是否有GeoHUB权限");
+              console.error("5. 当前使用的Key:", webServiceKey ? `${webServiceKey.substring(0, 10)}...` : "未找到");
             }
           } catch (e) {
             // 忽略解析错误
