@@ -7,6 +7,7 @@ import { isMobile } from "react-device-detect";
 import Sidebar, { SidebarMobileHeader } from "@/components/Sidebar";
 import RightToolbar from "@/components/RightToolbar";
 import { userFromStorage } from "@/utils/request";
+import LLMSelectorTop from "@/components/LLMSelector";
 
 export default function Main() {
   const { loading, requiresAuth, mode } = usePasswordModal();
@@ -18,6 +19,11 @@ export default function Main() {
   const user = userFromStorage();
   return (
     <div className="w-screen h-screen overflow-hidden bg-theme-bg-container flex">
+      {/* 左上角 LLM 模型选择器 */}
+      <div className="fixed top-4 left-4 z-50">
+        <LLMSelectorTop />
+      </div>
+
       {!isMobile ? <Sidebar /> : <SidebarMobileHeader />}
       <div className="flex-1 min-w-0">
         {!!user && user?.role !== "admin" ? <DefaultChatContainer /> : <Home />}
