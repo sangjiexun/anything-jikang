@@ -317,7 +317,7 @@ const RenderChatContent = memo(
         />
         {shouldShowTravelRoute && (
           <div className="mt-4">
-            <TravelRoutePlanner query={msgToRender} />
+            <TravelRoutePlanner query={msgToRender} message={msgToRender} />
           </div>
         )}
         {shouldCallAmapTool && !shouldShowTravelRoute && (

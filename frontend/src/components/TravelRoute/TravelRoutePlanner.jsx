@@ -277,17 +277,144 @@ function AttractionCard({ attraction, index, onClose, onNavigate }) {
 }
 
 // 主组件
-export default function TravelRoutePlanner({ query, onComplete }) {
+export default function TravelRoutePlanner({ query, message, onComplete }) {
   const [attractions, setAttractions] = useState([]);
   const [route, setRoute] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentAttractionIndex, setCurrentAttractionIndex] = useState(0);
   const [selectedPoi, setSelectedPoi] = useState(null);
+  const [parsedAttractions, setParsedAttractions] = useState(new Set());
 
+  // 监听流式消息，实时解析景点
+  useEffect(() => {
+    if (!message) return;
+    parseAttractionsFromMessage(message);
+  }, [message]);
+
+  // 初始查询处理
   useEffect(() => {
     if (!query) return;
     generateTravelRoute(query);
   }, [query]);
+
+  // 从流式消息中解析景点信息
+  const parseAttractionsFromMessage = async (messageText) => {
+    if (!messageText) return;
+
+    // 匹配景点模式：1. 景点名称、2. 推荐景点、3. 景点列表
+    const patterns = [
+      /(?:景点|景区|地方|推荐)[:：]?\s*([^，,。.\n]+?)(?:\s|$|，|。)/g,
+      /(?:第[一二三四五六七八九十\d]+个|景点\d+)[:：]?\s*([^，,。.\n]+?)(?:\s|$|，|。)/g,
+      /([^，,。.\n]+?)(?:景点|景区|公园|博物馆|古迹|遗址|名胜)(?:\s|$|，|。)/g,
+    ];
+
+    const foundAttractions = [];
+    patterns.forEach((pattern) => {
+      let match;
+      while ((match = pattern.exec(messageText)) !== null) {
+        const name = match[1]?.trim();
+        if (name && name.length > 1 && name.length < 30 && !parsedAttractions.has(name)) {
+          foundAttractions.push(name);
+        }
+      }
+    });
+
+    // 去重并获取新发现的景点
+    const newAttractions = [...new Set(foundAttractions)].filter(
+      (name) => !parsedAttractions.has(name)
+    );
+
+    if (newAttractions.length === 0) return;
+
+    // 更新已解析的景点集合
+    setParsedAttractions((prev) => {
+      const updated = new Set(prev);
+      newAttractions.forEach((name) => updated.add(name));
+      return updated;
+    });
+
+    // 为每个新发现的景点获取坐标并创建卡片
+    for (const attractionName of newAttractions) {
+      await addAttractionCard(attractionName);
+    }
+  };
+
+  // 添加景点卡片
+  const addAttractionCard = async (attractionName) => {
+    try {
+      const config = getAmapMCPConfig();
+      if (!config || !config.apiKey) {
+        console.warn("未找到高德地图MCP配置");
+        return;
+      }
+
+      // 提取城市信息
+      const cityMatch = message?.match(/(?:在|到|去|前往)([^，,。.\n]+?)(?:的|旅游|游玩|景点)/) || 
+                       query?.match(/(?:在|到|去|前往)([^，,。.\n]+?)(?:的|旅游|游玩|景点)/);
+      const city = cityMatch ? cityMatch[1] : "北京";
+
+      // 使用高德MCP获取地址坐标
+      let coordinates = null;
+      try {
+        const geoResult = await callAmapTool("maps_geo", {
+          address: `${city}${attractionName}`,
+        });
+
+        if (geoResult && geoResult.success && geoResult.data) {
+          const location = geoResult.data.location;
+          if (location) {
+            const [lng, lat] = location.split(",").map(Number);
+            coordinates = [lng, lat];
+          }
+        }
+      } catch (error) {
+        console.warn(`获取${attractionName}坐标失败:`, error);
+      }
+
+      // 如果没有获取到坐标，使用默认坐标
+      if (!coordinates) {
+        const defaultCoords = {
+          北京: [116.397428, 39.90923],
+          上海: [121.473701, 31.230416],
+          广州: [113.264385, 23.129112],
+          深圳: [114.057868, 22.543099],
+        };
+        const baseCoord = defaultCoords[city] || [116.397428, 39.90923];
+        coordinates = [
+          baseCoord[0] + (Math.random() - 0.5) * 0.1,
+          baseCoord[1] + (Math.random() - 0.5) * 0.1,
+        ];
+      }
+
+      const newAttraction = {
+        id: Date.now() + Math.random(),
+        name: attractionName,
+        description: `这是${city}的一个著名景点，值得一游。`,
+        coordinates: coordinates,
+        distance: attractions.length > 0 ? `${(Math.random() * 5 + 2).toFixed(1)}公里` : "起点",
+        duration: attractions.length > 0 ? `${Math.round(Math.random() * 30 + 15)}分钟` : null,
+        details: [
+          `位于${city}市中心`,
+          "开放时间：9:00-18:00",
+          "建议游玩时间：2-3小时",
+        ],
+      };
+
+      setAttractions((prev) => {
+        const updated = [...prev, newAttraction];
+        
+        // 更新路线
+        if (updated.length > 1) {
+          const routeCoords = updated.map((a) => a.coordinates);
+          setRoute(routeCoords);
+        }
+        
+        return updated;
+      });
+    } catch (error) {
+      console.error("添加景点卡片失败:", error);
+    }
+  };
 
   const generateTravelRoute = async (queryText) => {
     setLoading(true);
@@ -318,6 +445,12 @@ export default function TravelRoutePlanner({ query, onComplete }) {
         }
       });
 
+      // 如果已经有从流式消息解析的景点，就不需要再生成
+      if (attractions.length > 0) {
+        setLoading(false);
+        return;
+      }
+
       // 流式生成景点
       const generatedAttractions = [];
       
@@ -327,68 +460,13 @@ export default function TravelRoutePlanner({ query, onComplete }) {
 
         let attractionName = attractionKeywords[i] || `${city}景点${i + 1}`;
         
-        // 使用高德MCP获取地址坐标
-        let coordinates = null;
-        try {
-          const geoResult = await callAmapTool("maps_geo", {
-            address: `${city}${attractionName}`,
-          });
-
-          if (geoResult && geoResult.success && geoResult.data) {
-            const location = geoResult.data.location;
-            if (location) {
-              const [lng, lat] = location.split(",").map(Number);
-              coordinates = [lng, lat];
-            }
-          }
-        } catch (error) {
-          console.warn(`获取${attractionName}坐标失败:`, error);
-        }
-
-        // 如果没有获取到坐标，使用默认坐标（城市中心附近）
-        if (!coordinates) {
-          const defaultCoords = {
-            北京: [116.397428, 39.90923],
-            上海: [121.473701, 31.230416],
-            广州: [113.264385, 23.129112],
-            深圳: [114.057868, 22.543099],
-          };
-          const baseCoord = defaultCoords[city] || [116.397428, 39.90923];
-          coordinates = [
-            baseCoord[0] + (Math.random() - 0.5) * 0.1,
-            baseCoord[1] + (Math.random() - 0.5) * 0.1,
-          ];
-        }
-
-        const attraction = {
-          id: i,
-          name: attractionName,
-          description: `这是${city}的一个著名景点，值得一游。`,
-          coordinates: coordinates,
-          distance: i > 0 ? `${(Math.random() * 5 + 2).toFixed(1)}公里` : "起点",
-          duration: i > 0 ? `${Math.round(Math.random() * 30 + 15)}分钟` : null,
-          details: [
-            `位于${city}市中心`,
-            "开放时间：9:00-18:00",
-            "建议游玩时间：2-3小时",
-          ],
-        };
-
-        generatedAttractions.push(attraction);
-        setAttractions([...generatedAttractions]);
-        setCurrentAttractionIndex(i);
-
-        // 构建路线
-        if (generatedAttractions.length > 1) {
-          const routeCoords = generatedAttractions.map((a) => a.coordinates);
-          setRoute(routeCoords);
-        }
+        await addAttractionCard(attractionName);
       }
 
       setLoading(false);
       if (onComplete) {
         onComplete({
-          attractions: generatedAttractions,
+          attractions: attractions,
           route: route,
         });
       }
