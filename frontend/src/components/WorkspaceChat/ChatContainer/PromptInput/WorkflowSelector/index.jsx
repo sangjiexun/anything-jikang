@@ -226,12 +226,15 @@ export default function WorkflowSelector({ queryText = "", onSelect, onRun }) {
           {selectedWorkflow ? (
             <>
               <span className="max-w-[80px] truncate">{selectedWorkflow.name}</span>
-              <button
+              <span
                 onClick={clearSelection}
-                className="p-0.5 hover:bg-indigo-500/30 rounded"
+                className="p-0.5 hover:bg-indigo-500/30 rounded cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && clearSelection(e)}
               >
                 <X className="w-3 h-3" />
-              </button>
+              </span>
             </>
           ) : (
             <CaretDown className="w-3 h-3" />
