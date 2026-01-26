@@ -1,0 +1,65 @@
+{
+  "active": true,
+  "hubId": "amap-maps",
+  "name": "高德地图",
+  "schema": "skill-1.0.0",
+  "version": "1.0.0",
+  "description": "高德地图官方 MCP Server，支持地理编码、天气查询、路线规划、POI搜索等多种定位服务",
+  "author": "@anything-jikang",
+  "author_url": "https://github.com/sangjiexun/anything-jikang",
+  "license": "MIT",
+  "setup_args": {
+    "AMAP_MAPS_API_KEY": {
+      "type": "string",
+      "required": true,
+      "input": {
+        "type": "text",
+        "default": "671a340b83a6c56c1ac80779984ab086",
+        "placeholder": "请输入您的高德地图 API Key",
+        "hint": "高德地图 Web 服务 API Key，用于后端 API 调用"
+      }
+    },
+    "AMAP_WEB_API_KEY": {
+      "type": "string",
+      "required": false,
+      "input": {
+        "type": "text",
+        "default": "671a340b83a6c56c1ac80779984ab086",
+        "placeholder": "请输入您的高德地图 Web 端 Key",
+        "hint": "高德地图 Web 端 API Key，用于前端地图显示（可选）"
+      }
+    }
+  },
+  "examples": [
+    {
+      "prompt": "北京天气怎么样？",
+      "call": "{\"tool\": \"maps_weather\", \"city\": \"北京\"}"
+    },
+    {
+      "prompt": "搜索附近的餐厅",
+      "call": "{\"tool\": \"maps_text_search\", \"keywords\": \"餐厅\", \"city\": \"北京\"}"
+    },
+    {
+      "prompt": "从北京到上海的驾车路线",
+      "call": "{\"tool\": \"maps_direction_driving\", \"origin\": \"116.397128,39.916527\", \"destination\": \"121.473701,31.230416\"}"
+    },
+    {
+      "prompt": "116.397128,39.916527 这个坐标的地址是什么？",
+      "call": "{\"tool\": \"maps_regeocode\", \"location\": \"116.397128,39.916527\"}"
+    }
+  ],
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {
+      "tool": {
+        "description": "要调用的高德地图工具名称",
+        "type": "string"
+      },
+      "params": {
+        "description": "工具的参数对象",
+        "type": "string"
+      }
+    }
+  },
+  "imported": true
+}
