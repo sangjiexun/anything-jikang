@@ -371,18 +371,8 @@ export default function PromptInput({
         className="flex flex-col gap-y-1 rounded-t-lg md:w-3/4 w-full mx-auto max-w-xl items-center"
       >
         <div className="flex items-center rounded-lg md:mb-4 md:w-full">
-          <div 
-            className="w-[95vw] md:w-[635px] flex flex-col px-4 py-3 overflow-hidden relative"
-            style={{
-              background: "linear-gradient(135deg, rgba(10, 10, 20, 0.95), rgba(20, 10, 30, 0.95))",
-              backdropFilter: "blur(10px)",
-              border: "2px solid",
-              borderImage: "linear-gradient(45deg, #00ffff, #ffff00) 1",
-              borderRadius: "16px",
-              boxShadow: "0 0 20px rgba(0, 255, 255, 0.3), inset 0 0 10px rgba(0, 255, 255, 0.1)",
-            }}
-          >
-            {/* 可拖动的调节条 - 黑客风格光柱效果 */}
+          <div className="w-[95vw] md:w-[635px] bg-theme-bg-chat-input light:bg-white light:border-solid light:border-[1px] light:border-theme-chat-input-border shadow-sm rounded-2xl pwa:rounded-3xl flex flex-col px-2 overflow-hidden">
+            {/* 可拖动的调节条 - 光柱效果 */}
             <div
               onMouseDown={handleDragStart}
               onTouchStart={handleDragStart}
@@ -392,7 +382,7 @@ export default function PromptInput({
             </div>
 
             <AttachmentManager attachments={attachments} />
-            <div className="flex items-center border-b mx-3" style={{ borderColor: "rgba(0, 255, 255, 0.2)" }}>
+            <div className="flex items-center border-b border-theme-chat-input-border mx-3">
               <textarea
                 id={PROMPT_INPUT_ID}
                 ref={textareaRef}
@@ -413,10 +403,9 @@ export default function PromptInput({
                 style={{
                   minHeight: `${inputHeight}px`,
                   maxHeight: `${Math.max(inputHeight, 350)}px`,
-                  fontFamily: "'Courier New', monospace",
                 }}
-                className={`border-none cursor-text mx-2 md:mx-0 pt-[12px] w-full leading-6 text-white bg-transparent placeholder:text-white/50 resize-none active:outline-none focus:outline-none flex-grow mb-1 pwa:!text-[16px] ${textSizeClass}`}
-                placeholder={t("chat_window.send_message") || "给AI一个任务，让它在云端自主规划、调用工具，并多步骤为你执行完成..."}
+                className={`border-none cursor-text mx-2 md:mx-0 pt-[12px] w-full leading-5 text-white bg-transparent placeholder:text-white/60 light:placeholder:text-theme-text-primary resize-none active:outline-none focus:outline-none flex-grow mb-1 pwa:!text-[16px] ${textSizeClass}`}
+                placeholder={t("chat_window.send_message")}
               />
               {isStreaming ? (
                 <StopGenerationButton />
