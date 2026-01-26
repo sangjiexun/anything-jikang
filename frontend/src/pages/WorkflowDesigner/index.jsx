@@ -18,7 +18,7 @@ import {
   GitBranch,
   ArrowsClockwise,
   Timer,
-  Webhook,
+  Globe,
   Funnel,
   MagicWand,
   X,
@@ -36,7 +36,7 @@ const NODE_TYPES = [
     nodes: [
       { type: "trigger-manual", name: "手动触发", icon: Play, color: "bg-green-500" },
       { type: "trigger-schedule", name: "定时触发", icon: Timer, color: "bg-blue-500" },
-      { type: "trigger-webhook", name: "Webhook", icon: Webhook, color: "bg-purple-500" },
+      { type: "trigger-webhook", name: "Webhook", icon: Globe, color: "bg-purple-500" },
     ],
   },
   {
