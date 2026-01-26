@@ -177,12 +177,23 @@ function FlashcardCreateModal({ workspace, message, onClose }) {
       
       if (!response.ok) {
         // 如果API不存在，静默失败，允许不选择知识库的模式
-        console.warn("知识库API不可用，将使用基于消息内容的模式");
+        if (response.status === 404) {
+          console.warn("知识库API不可用（404），将使用基于消息内容的模式");
+        } else {
+          console.warn(`知识库API错误（${response.status}），将使用基于消息内容的模式`);
+        }
         setKnowledgeBases([]);
         return;
       }
       
-      const result = await response.json();
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        console.warn("知识库API响应解析失败，将使用基于消息内容的模式");
+        setKnowledgeBases([]);
+        return;
+      }
       if (result.success && result.data) {
         setKnowledgeBases(result.data);
         // 加载每个知识库的文档

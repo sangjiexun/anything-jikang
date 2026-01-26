@@ -8,6 +8,7 @@ export default function AmapViewer({
   routeData = null,
   pois = [],
   markers = [],
+  trajectoryData = null, // 轨迹数据：{ datasetId, terminalId, webServiceKey }
 }) {
   const mapRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -43,17 +44,36 @@ export default function AmapViewer({
           return;
         }
 
-        // 加载高德地图 JS API - 使用正确的API版本
+        // 加载高德地图 JS API - 使用v2.0以支持Loca.js
         const amapScript = document.createElement("script");
-        // 使用JS API v1.4.15，这是稳定的版本
-        amapScript.src = `https://webapi.amap.com/maps?v=1.4.15&key=${apiKey}`;
+        amapScript.src = `https://webapi.amap.com/maps?v=2.0&key=${apiKey}`;
         amapScript.async = true;
         amapScript.defer = true;
         
         amapScript.onload = () => {
           if (window.AMap) {
-            setMapLoaded(true);
-            resolve();
+            // 加载Loca.js用于轨迹可视化
+            if (!window.Loca) {
+              const locaScript = document.createElement("script");
+              locaScript.src = `https://webapi.amap.com/loca?v=2.0.0&key=${apiKey}`;
+              locaScript.async = true;
+              locaScript.defer = true;
+              locaScript.onload = () => {
+                if (window.Loca) {
+                  setMapLoaded(true);
+                  resolve();
+                } else {
+                  reject(new Error("Loca.js加载失败"));
+                }
+              };
+              locaScript.onerror = () => {
+                reject(new Error("Loca.js加载失败"));
+              };
+              document.head.appendChild(locaScript);
+            } else {
+              setMapLoaded(true);
+              resolve();
+            }
           } else {
             reject(new Error("地图API加载失败：AMap对象未初始化"));
           }
@@ -80,10 +100,10 @@ export default function AmapViewer({
         const map = new window.AMap.Map(mapRef.current, {
           zoom: zoom,
           center: center || [116.455672, 39.966409],
-          showLabel: true,
-          viewMode: "2D", // 使用2D模式，避免3D相关错误
-          mapStyle: "amap://styles/normal", // 使用正常样式
-          resizeEnable: true, // 允许自动调整大小
+          showLabel: false, // 轨迹可视化时关闭标签
+          viewMode: trajectoryData ? "3D" : "2D", // 轨迹可视化使用3D模式
+          mapStyle: trajectoryData ? "amap://styles/grey" : "amap://styles/normal",
+          resizeEnable: true,
         });
         
         // 确保地图容器大小正确
@@ -119,6 +139,11 @@ export default function AmapViewer({
           drawMarkers(map, pois.length > 0 ? pois : markers);
         }
 
+        // 绘制轨迹（如果提供轨迹数据）
+        if (trajectoryData && window.Loca) {
+          drawTrajectory(map, trajectoryData);
+        }
+
         return map;
       })
       .catch((error) => {
@@ -143,7 +168,7 @@ export default function AmapViewer({
         mapInstanceRef.current = null;
       }
     };
-  }, [apiKey, center, zoom, routeData, pois, markers]);
+  }, [apiKey, center, zoom, routeData, pois, markers, trajectoryData]);
 
   // 绘制路线
   const drawRoute = (map, routeData) => {
@@ -256,6 +281,118 @@ export default function AmapViewer({
       }
     });
     return coords;
+  };
+
+  // 绘制轨迹（使用Loca.js PulseLineLayer）
+  const drawTrajectory = async (map, trajectoryData) => {
+    if (!window.Loca || !window.jQuery || !trajectoryData.datasetId || !trajectoryData.webServiceKey) {
+      console.warn("轨迹可视化需要Loca.js、jQuery和完整的轨迹数据");
+      return;
+    }
+
+    try {
+      // 创建Loca容器
+      if (!locaInstanceRef.current) {
+        locaInstanceRef.current = new window.Loca.Container({
+          map: map,
+        });
+      }
+
+      const loca = locaInstanceRef.current;
+
+      // 构建属性筛选查询
+      const propertiesFilter = JSON.stringify({
+        relation: "and",
+        conditions: [
+          {
+            field: "terminalId",
+            operation: "equal",
+            value: trajectoryData.terminalId || 1,
+          },
+        ],
+      });
+
+      // 调用GeoHUB API获取轨迹点
+      const url = `https://restapi.amap.com/rest/lbs/geohub/place/properties?key=${trajectoryData.webServiceKey}&dataset_id=${trajectoryData.datasetId}&properties=${encodeURIComponent(propertiesFilter)}&offset=300`;
+
+      window.jQuery.ajax({
+        url: url,
+        method: "GET",
+      })
+        .done(function (res) {
+          if (!res || !res.objects || res.objects.length === 0) {
+            console.warn("未找到轨迹数据");
+            return;
+          }
+
+          // 提取轨迹路径
+          const path = [];
+          res.objects.forEach((item) => {
+            if (item.geometry && item.geometry.coordinates) {
+              path.push(item.geometry.coordinates);
+            }
+          });
+
+          if (path.length === 0) {
+            console.warn("轨迹路径为空");
+            return;
+          }
+
+          // 创建GeoJSON数据源
+          const geo = new window.Loca.GeoJSONSource({
+            data: {
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  geometry: {
+                    type: "LineString",
+                    coordinates: path,
+                  },
+                },
+              ],
+            },
+          });
+
+          // 创建脉冲线图层
+          const layer = new window.Loca.PulseLineLayer({
+            zIndex: 10,
+            opacity: 1,
+            visible: true,
+            zooms: [2, 22],
+          });
+
+          layer.setSource(geo);
+          layer.setStyle({
+            altitude: 0,
+            lineWidth: 6,
+            // 脉冲头颜色
+            headColor: "#efd551",
+            // 脉冲尾颜色
+            trailColor: "rgba(128, 128, 128, 0.5)",
+            interval: 1,
+            // 脉冲线的速度，几秒钟跑完整段路
+            duration: 5000,
+          });
+
+          loca.add(layer);
+          loca.animate.start();
+
+          // 调整地图视野以包含整条轨迹
+          if (path.length > 0) {
+            const bounds = new window.AMap.Bounds();
+            path.forEach((coord) => {
+              bounds.extend(coord);
+            });
+            map.setBounds(bounds);
+          }
+        })
+        .fail(function (error) {
+          console.error("获取轨迹数据失败:", error);
+        });
+    } catch (error) {
+      console.error("绘制轨迹失败:", error);
+    }
   };
 
   return (
