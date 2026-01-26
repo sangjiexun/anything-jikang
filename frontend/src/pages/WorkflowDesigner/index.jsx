@@ -108,6 +108,10 @@ export default function WorkflowDesigner() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // 运行查询对话框状态
+  const [showRunDialog, setShowRunDialog] = useState(false);
+  const [runQuery, setRunQuery] = useState("");
+
   // 大模型配置状态
   const [showLLMConfig, setShowLLMConfig] = useState(false);
   const [llmConfig, setLLMConfig] = useState(() => {
@@ -465,6 +469,73 @@ export default function WorkflowDesigner() {
     }
   };
 
+  // 新建工作流
+  const createNewWorkflow = () => {
+    if (workflow.nodes?.length > 0 || workflow.connections?.length > 0) {
+      if (!confirm("当前工作流未保存，确定新建吗？")) {
+        return;
+      }
+    }
+    const newWorkflow = {
+      id: generateId(),
+      uuid: `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: "新建工作流",
+      nodes: [],
+      connections: [],
+    };
+    setWorkflow(newWorkflow);
+    setSelectedNode(null);
+    setHistory([]);
+    setRedoStack([]);
+    localStorage.setItem("workflow_draft", JSON.stringify(newWorkflow));
+    showToast("已创建新工作流", "success");
+  };
+
+  // 删除当前工作流
+  const deleteCurrentWorkflow = () => {
+    if (!confirm("确定要删除当前工作流吗？此操作不可恢复。")) {
+      return;
+    }
+    
+    try {
+      // 从工作流列表中移除
+      if (workflow.uuid) {
+        let localWorkflows = [];
+        try {
+          const saved = localStorage.getItem("workflow_list");
+          if (saved) {
+            localWorkflows = JSON.parse(saved);
+          }
+        } catch (e) {
+          console.error("Error loading local workflows:", e);
+        }
+        
+        localWorkflows = localWorkflows.filter((w) => w.uuid !== workflow.uuid);
+        localStorage.setItem("workflow_list", JSON.stringify(localWorkflows));
+        
+        // 删除工作流数据
+        localStorage.removeItem(`workflow_${workflow.uuid}`);
+      }
+      
+      // 清空当前工作流，变为空白工作流
+      const emptyWorkflow = {
+        id: generateId(),
+        uuid: `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: "空白工作流",
+        nodes: [],
+        connections: [],
+      };
+      setWorkflow(emptyWorkflow);
+      setSelectedNode(null);
+      setHistory([]);
+      setRedoStack([]);
+      localStorage.setItem("workflow_draft", JSON.stringify(emptyWorkflow));
+      showToast("工作流已删除", "success");
+    } catch (error) {
+      showToast("删除失败: " + error.message, "error");
+    }
+  };
+
   // 日志计数器（用于生成唯一 ID）
   const logIdRef = useRef(0);
 
@@ -691,12 +762,24 @@ export default function WorkflowDesigner() {
     return adjacency[nodeId]?.length > 1;
   };
 
-  // 运行工作流（支持并行执行和条件分支）
-  const runWorkflow = async () => {
+  // 打开运行对话框
+  const openRunDialog = () => {
     if ((workflow.nodes || []).length === 0) {
       showToast("请先添加节点", "warning");
       return;
     }
+    setRunQuery("");
+    setShowRunDialog(true);
+  };
+
+  // 运行工作流（支持并行执行和条件分支）
+  const runWorkflow = async (queryInput = "") => {
+    if ((workflow.nodes || []).length === 0) {
+      showToast("请先添加节点", "warning");
+      return;
+    }
+
+    setShowRunDialog(false);
 
     // 重置状态
     setIsRunning(true);
@@ -717,6 +800,11 @@ export default function WorkflowDesigner() {
       }
 
       addLog("info", `共 ${nodes.length} 个节点，${startNodes.length} 个起始节点`);
+      
+      // 显示用户输入的 query
+      if (queryInput) {
+        addLog("info", `📝 用户输入: ${queryInput}`);
+      }
       
       // 检测工作流模式
       const hasFork = nodes.some((n) => isForkNode(n.id, adjacency));
@@ -739,7 +827,16 @@ export default function WorkflowDesigner() {
         // 收集所有前驱节点的输出作为输入
         const inputs = predecessors[node.id].map((predId) => allResults[predId]);
         // 如果只有一个输入，直接传递；否则传递数组
-        const inputData = inputs.length === 1 ? inputs[0] : inputs.length > 0 ? inputs : null;
+        // 对于起始节点（无前驱），使用用户输入的 queryInput
+        let inputData;
+        if (inputs.length === 1) {
+          inputData = inputs[0];
+        } else if (inputs.length > 0) {
+          inputData = inputs;
+        } else {
+          // 起始节点使用用户输入
+          inputData = queryInput || null;
+        }
         
         const result = await executeNode(node, inputData);
         allResults[node.id] = result;
@@ -1121,6 +1218,23 @@ export default function WorkflowDesigner() {
               }
               className="bg-transparent text-theme-text-primary font-medium text-lg focus:outline-none border-b border-transparent hover:border-theme-sidebar-border focus:border-blue-500 transition-colors"
             />
+            <div className="w-px h-6 bg-theme-sidebar-border" />
+            <button
+              onClick={createNewWorkflow}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-colors"
+              title="新建工作流"
+            >
+              <Plus className="w-4 h-4" />
+              新建
+            </button>
+            <button
+              onClick={deleteCurrentWorkflow}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-red-500/10 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-colors"
+              title="删除当前工作流"
+            >
+              <Trash className="w-4 h-4" />
+              删除
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1172,7 +1286,7 @@ export default function WorkflowDesigner() {
               保存
             </button>
             <button
-              onClick={runWorkflow}
+              onClick={openRunDialog}
               disabled={isRunning}
               className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
             >
@@ -1710,6 +1824,56 @@ export default function WorkflowDesigner() {
           )}
         </div>
       </div>
+
+      {/* 运行工作流对话框 */}
+      {showRunDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-theme-bg-secondary border border-theme-sidebar-border rounded-xl w-[500px] max-w-[90vw] shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-theme-sidebar-border">
+              <h2 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
+                <Play className="w-5 h-5 text-green-400" />
+                运行工作流
+              </h2>
+              <button
+                onClick={() => setShowRunDialog(false)}
+                className="p-1 hover:bg-theme-action-menu-item-hover rounded"
+              >
+                <X className="w-5 h-5 text-theme-text-secondary" />
+              </button>
+            </div>
+            <div className="p-4">
+              <p className="text-sm text-theme-text-secondary mb-3">
+                请输入大模型执行的查询内容（可选）：
+              </p>
+              <textarea
+                value={runQuery}
+                onChange={(e) => setRunQuery(e.target.value)}
+                placeholder="输入您的问题或指令，例如：帮我写一篇关于人工智能的文章..."
+                className="w-full h-32 px-4 py-3 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm resize-none focus:outline-none focus:border-green-500"
+                autoFocus
+              />
+              <p className="text-xs text-theme-text-secondary mt-2">
+                此输入将作为工作流起始节点的输入数据
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t border-theme-sidebar-border">
+              <button
+                onClick={() => setShowRunDialog(false)}
+                className="px-4 py-2 text-theme-text-secondary hover:bg-theme-action-menu-item-hover rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => runWorkflow(runQuery)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+              >
+                <Play className="w-4 h-4" />
+                开始运行
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI创建工作流弹窗 */}
       {showAICreator && (
