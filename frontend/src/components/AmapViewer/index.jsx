@@ -36,21 +36,38 @@ export default function AmapViewer({
           document.head.appendChild(jqScript);
         }
 
-        // 加载高德地图 API
+        // 检查是否已加载
+        if (window.AMap) {
+          setMapLoaded(true);
+          resolve();
+          return;
+        }
+
+        // 加载高德地图 JS API - 使用正确的API版本
         const amapScript = document.createElement("script");
-        amapScript.src = `https://webapi.amap.com/maps?v=2.0&key=${apiKey}`;
+        // 使用JS API v1.4.15，这是稳定的版本
+        amapScript.src = `https://webapi.amap.com/maps?v=1.4.15&key=${apiKey}`;
+        amapScript.async = true;
+        amapScript.defer = true;
+        
         amapScript.onload = () => {
-          // 加载 Loca
-          const locaScript = document.createElement("script");
-          locaScript.src = `https://webapi.amap.com/loca?v=2.0.0&key=${apiKey}`;
-          locaScript.onload = () => {
+          if (window.AMap) {
             setMapLoaded(true);
             resolve();
-          };
-          locaScript.onerror = reject;
-          document.head.appendChild(locaScript);
+          } else {
+            reject(new Error("地图API加载失败：AMap对象未初始化"));
+          }
         };
-        amapScript.onerror = reject;
+        
+        amapScript.onerror = (error) => {
+          console.error("高德地图加载失败:", error);
+          console.error("可能的原因：");
+          console.error("1. API Key类型错误 - 请确保使用的是Web端Key（JS API），而不是Web服务API Key");
+          console.error("2. API Key的平台设置不正确 - 请在控制台设置中允许当前域名");
+          console.error("3. API Key已过期或无效");
+          reject(new Error("地图加载失败：USERKEY_PLAT_NOMATCH - 请检查API Key类型和平台设置"));
+        };
+        
         document.head.appendChild(amapScript);
       });
     };
@@ -63,20 +80,34 @@ export default function AmapViewer({
         const map = new window.AMap.Map(mapRef.current, {
           zoom: zoom,
           center: center || [116.455672, 39.966409],
-          showLabel: false,
-          viewMode: "3D",
-          mapStyle: "amap://styles/grey",
+          showLabel: true,
+          viewMode: "2D", // 使用2D模式，避免3D相关错误
+          mapStyle: "amap://styles/normal", // 使用正常样式
+          resizeEnable: true, // 允许自动调整大小
+        });
+        
+        // 确保地图容器大小正确
+        map.on("complete", () => {
+          map.getSize();
+          setTimeout(() => {
+            map.resize();
+          }, 100);
         });
 
         mapInstanceRef.current = map;
 
-        // 初始化 Loca
-        if (window.Loca) {
-          const loca = new window.Loca.Container({
-            map,
-          });
-          locaInstanceRef.current = loca;
-        }
+        // 地图加载完成后的处理
+        map.on("complete", () => {
+          // 确保地图正确渲染
+          setTimeout(() => {
+            try {
+              map.getSize();
+              map.resize();
+            } catch (e) {
+              console.warn("地图resize失败:", e);
+            }
+          }, 100);
+        });
 
         // 绘制路线
         if (routeData) {
@@ -228,15 +259,40 @@ export default function AmapViewer({
   };
 
   return (
-    <div className="w-full rounded-lg overflow-hidden border border-theme-sidebar-border">
+    <div 
+      className="w-full rounded-lg overflow-hidden border border-theme-sidebar-border relative" 
+      style={{ 
+        height: height, 
+        minHeight: "300px",
+        maxWidth: "100%",
+        position: "relative",
+        boxSizing: "border-box"
+      }}
+    >
       <div
         ref={mapRef}
-        style={{ width: "100%", height: height, minHeight: "300px" }}
+        style={{ 
+          width: "100%", 
+          height: "100%", 
+          minHeight: "300px",
+          position: "relative",
+          boxSizing: "border-box",
+          overflow: "hidden"
+        }}
         className="bg-gray-800"
       />
       {!mapLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-800/80">
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-800/80 z-10 pointer-events-none">
           <div className="text-white/60">正在加载地图...</div>
+        </div>
+      )}
+      {!apiKey && (
+        <div className="absolute inset-0 flex items-center justify-center bg-red-500/10 border border-red-500/30 z-10 pointer-events-none">
+          <div className="text-red-400 text-sm text-center p-4">
+            <p className="font-semibold mb-2">地图API Key未配置</p>
+            <p className="text-xs">请在MCP设置中配置Web端API Key（用于地图显示）</p>
+            <p className="text-xs mt-1">注意：Web服务API Key和Web端Key是不同的，请确保使用正确的Key类型</p>
+          </div>
         </div>
       )}
     </div>

@@ -440,7 +440,7 @@ export default function AmapResult({ query, onResult }) {
                 ))}
               </div>
             </div>
-            {locations.length > 0 && config.webApiKey && (
+            {locations.length > 0 && config.webApiKey ? (
               <AmapViewer
                 apiKey={config.webApiKey}
                 center={locations[0].coordinates}
@@ -448,7 +448,12 @@ export default function AmapResult({ query, onResult }) {
                 height="400px"
                 pois={locations}
               />
-            )}
+            ) : locations.length > 0 ? (
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-yellow-400 text-sm">
+                <p className="font-semibold mb-1">地图显示需要Web端API Key</p>
+                <p className="text-xs">请在MCP设置中配置Web端API Key</p>
+              </div>
+            ) : null}
           </div>
         );
       }
@@ -480,7 +485,7 @@ export default function AmapResult({ query, onResult }) {
                 }</p>
               </div>
             </div>
-            {route && config.webApiKey && (
+            {route && config.webApiKey ? (
               <AmapViewer
                 apiKey={config.webApiKey}
                 center={origin || [116.455672, 39.966409]}
@@ -488,7 +493,12 @@ export default function AmapResult({ query, onResult }) {
                 height="400px"
                 routeData={route}
               />
-            )}
+            ) : route ? (
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-yellow-400 text-sm">
+                <p className="font-semibold mb-1">地图显示需要Web端API Key</p>
+                <p className="text-xs">请在MCP设置中配置Web端API Key以显示路线</p>
+              </div>
+            ) : null}
           </div>
         );
       }
