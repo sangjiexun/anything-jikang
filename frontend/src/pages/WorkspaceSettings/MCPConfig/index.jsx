@@ -154,20 +154,54 @@ export default function MCPConfig({ workspace }) {
   };
 
   const retryConnection = async (serverId) => {
+    const server = servers.find((s) => s.id === serverId);
+    if (!server) return;
+
     setLoading(true);
     showToast("正在重试连接...", "info");
     
-    // 模拟重试连接
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    const newServers = servers.map((s) =>
-      s.id === serverId
-        ? { ...s, status: Math.random() > 0.5 ? "connected" : "error" }
-        : s
-    );
-    saveServers(newServers);
-    setLoading(false);
-    showToast("连接尝试完成", "success");
+    try {
+      const MCPServers = (await import("@/models/mcpServers")).default;
+      
+      // 先尝试停止服务器（如果正在运行）
+      await MCPServers.toggleServer(server.name);
+      
+      // 等待一下
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      // 重新启动服务器
+      const toggleResult = await MCPServers.toggleServer(server.name);
+      
+      if (toggleResult.success) {
+        // 重新加载服务器列表
+        const { servers: backendServers } = await MCPServers.listServers();
+        const backendServer = backendServers.find(s => s.name === server.name);
+        
+        const newServers = servers.map((s) =>
+          s.id === serverId
+            ? { 
+                ...s, 
+                status: backendServer?.running ? "connected" : "error",
+                error: backendServer?.error || null,
+              }
+            : s
+        );
+        saveServers(newServers);
+        
+        if (backendServer?.running) {
+          showToast("连接成功", "success");
+        } else {
+          showToast(`连接失败: ${backendServer?.error || "未知错误"}`, "error");
+        }
+      } else {
+        showToast(`重试失败: ${toggleResult.error || "未知错误"}`, "error");
+      }
+    } catch (error) {
+      console.error("重试连接失败:", error);
+      showToast("重试连接失败: " + error.message, "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const deleteServer = (serverId) => {
@@ -192,112 +226,176 @@ export default function MCPConfig({ workspace }) {
   };
 
   const addManualServer = async (serverConfig) => {
-    const newServer = {
-      id: `manual_${Date.now()}`,
-      name: serverConfig.name,
-      status: "connected",
-      enabled: true,
-      type: "manual",
-      config: serverConfig,
+    // 构建后端配置
+    const backendConfig = {
+      command: serverConfig.command || "npx",
+      args: serverConfig.args 
+        ? (Array.isArray(serverConfig.args) 
+            ? serverConfig.args 
+            : typeof serverConfig.args === "string" && serverConfig.args.trim()
+            ? serverConfig.args.trim().split(/\s+/)
+            : [])
+        : [],
+      env: {
+        ...(serverConfig.apiKey ? { 
+          AMAP_MAPS_API_KEY: serverConfig.apiKey,
+          API_KEY: serverConfig.apiKey 
+        } : {}),
+        ...(serverConfig.webApiKey ? { 
+          AMAP_WEB_API_KEY: serverConfig.webApiKey,
+          WEB_API_KEY: serverConfig.webApiKey 
+        } : {}),
+      },
     };
 
-    // 如果配置包含API Key，保存到后端
-    if (serverConfig.apiKey || serverConfig.webApiKey) {
-      try {
-        const backendConfig = {
-          command: serverConfig.command || "npx",
-          args: serverConfig.args 
-            ? (Array.isArray(serverConfig.args) 
-                ? serverConfig.args 
-                : serverConfig.args.split(" "))
-            : [],
-          env: {
-            ...(serverConfig.apiKey ? { 
-              AMAP_MAPS_API_KEY: serverConfig.apiKey,
-              API_KEY: serverConfig.apiKey 
-            } : {}),
-            ...(serverConfig.webApiKey ? { 
-              AMAP_WEB_API_KEY: serverConfig.webApiKey,
-              WEB_API_KEY: serverConfig.webApiKey 
-            } : {}),
-          },
-        };
+    // 如果没有命令，使用默认值
+    if (!backendConfig.command) {
+      backendConfig.command = "npx";
+    }
 
-        const MCPServers = (await import("@/models/mcpServers")).default;
-        const result = await MCPServers.updateServer(serverConfig.name, backendConfig);
-        
-        if (result.success) {
-          showToast("MCP 服务器已添加并保存到后端", "success");
-        } else {
-          showToast("后端保存失败: " + (result.error || "未知错误"), "warning");
-        }
-      } catch (error) {
-        console.error("Failed to save MCP config to backend:", error);
-        showToast("后端保存失败: " + error.message, "error");
+    // 如果没有参数但有命令，确保args是数组
+    if (!backendConfig.args || backendConfig.args.length === 0) {
+      // 对于高德地图，如果没有参数，添加默认参数
+      if (serverConfig.name && serverConfig.name.includes("高德") || serverConfig.name.includes("amap")) {
+        backendConfig.args = ["-y", "@amap/amap-maps-mcp-server"];
       }
     }
 
-    const newServers = [...servers, newServer];
-    saveServers(newServers);
-    setShowManualModal(false);
-    showToast("MCP 服务器已添加", "success");
+    try {
+      // 先保存到后端
+      const MCPServers = (await import("@/models/mcpServers")).default;
+      const result = await MCPServers.updateServer(serverConfig.name, backendConfig);
+      
+      if (!result.success) {
+        showToast("后端保存失败: " + (result.error || "未知错误"), "error");
+        return;
+      }
+
+      // 保存成功后，重新加载服务器列表以获取真实状态
+      showToast("MCP 服务器已添加并保存到后端", "success");
+      
+      // 等待一下让服务器启动
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      
+      // 重新加载服务器列表
+      const { servers: backendServers } = await MCPServers.listServers();
+      const backendServer = backendServers.find(s => s.name === serverConfig.name);
+      
+      const newServer = {
+        id: `manual_${Date.now()}`,
+        name: serverConfig.name,
+        status: backendServer?.running ? "connected" : "error",
+        enabled: true,
+        type: "manual",
+        config: {
+          ...serverConfig,
+          command: backendConfig.command,
+          args: backendConfig.args,
+        },
+        error: backendServer?.error || null,
+      };
+
+      const newServers = [...servers, newServer];
+      saveServers(newServers);
+      setShowManualModal(false);
+      
+      // 如果服务器启动失败，显示错误信息
+      if (backendServer && !backendServer.running && backendServer.error) {
+        showToast(`服务器启动失败: ${backendServer.error}`, "warning");
+      }
+    } catch (error) {
+      console.error("Failed to save MCP config to backend:", error);
+      showToast("后端保存失败: " + error.message, "error");
+    }
   };
 
   const updateServer = async (serverId, updates) => {
     const server = servers.find((s) => s.id === serverId);
     if (!server) return;
 
-    // 如果配置包含API Key，保存到后端
-    if (updates.config && (updates.config.apiKey || updates.config.webApiKey)) {
-      try {
-        // 构建后端MCP服务器配置格式
-        const backendConfig = {
-          command: updates.config.command || server.config?.command || "npx",
-          args: updates.config.args 
-            ? (Array.isArray(updates.config.args) 
-                ? updates.config.args 
-                : updates.config.args.split(" "))
-            : (server.config?.args 
-                ? (Array.isArray(server.config.args) 
-                    ? server.config.args 
-                    : server.config.args.split(" "))
-                : []),
-          env: {
-            ...(server.config?.env || {}),
-            // 将API Key添加到环境变量中
-            ...(updates.config.apiKey ? { 
-              AMAP_MAPS_API_KEY: updates.config.apiKey,
-              API_KEY: updates.config.apiKey 
-            } : {}),
-            ...(updates.config.webApiKey ? { 
-              AMAP_WEB_API_KEY: updates.config.webApiKey,
-              WEB_API_KEY: updates.config.webApiKey 
-            } : {}),
-          },
-        };
+    try {
+      // 构建后端MCP服务器配置格式
+      const backendConfig = {
+        command: updates.config?.command || server.config?.command || "npx",
+        args: (() => {
+          // 优先使用更新后的args
+          if (updates.config?.args) {
+            if (Array.isArray(updates.config.args)) {
+              return updates.config.args;
+            } else if (typeof updates.config.args === "string" && updates.config.args.trim()) {
+              return updates.config.args.trim().split(/\s+/);
+            }
+          }
+          // 否则使用服务器现有配置
+          if (server.config?.args) {
+            if (Array.isArray(server.config.args)) {
+              return server.config.args;
+            } else if (typeof server.config.args === "string" && server.config.args.trim()) {
+              return server.config.args.trim().split(/\s+/);
+            }
+          }
+          // 默认值
+          return [];
+        })(),
+        env: {
+          ...(server.config?.env || {}),
+          // 将API Key添加到环境变量中
+          ...(updates.config?.apiKey ? { 
+            AMAP_MAPS_API_KEY: updates.config.apiKey,
+            API_KEY: updates.config.apiKey 
+          } : {}),
+          ...(updates.config?.webApiKey ? { 
+            AMAP_WEB_API_KEY: updates.config.webApiKey,
+            WEB_API_KEY: updates.config.webApiKey 
+          } : {}),
+        },
+      };
 
-        // 调用后端API保存配置
-        const MCPServers = (await import("@/models/mcpServers")).default;
-        const result = await MCPServers.updateServer(server.name, backendConfig);
-        
-        if (result.success) {
-          showToast("配置已保存到后端", "success");
-        } else {
-          showToast("后端保存失败: " + (result.error || "未知错误"), "warning");
-        }
-      } catch (error) {
-        console.error("Failed to save MCP config to backend:", error);
-        showToast("后端保存失败: " + error.message, "error");
+      // 调用后端API保存配置
+      const MCPServers = (await import("@/models/mcpServers")).default;
+      const result = await MCPServers.updateServer(server.name, backendConfig);
+      
+      if (!result.success) {
+        showToast("后端保存失败: " + (result.error || "未知错误"), "error");
+        return;
       }
-    }
 
-    // 同时更新本地存储
-    const newServers = servers.map((s) =>
-      s.id === serverId ? { ...s, ...updates } : s
-    );
-    saveServers(newServers);
-    setEditingServer(null);
-    showToast("配置已更新", "success");
+      showToast("配置已保存到后端，正在重新加载...", "success");
+      
+      // 重新加载服务器列表以获取最新状态
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const { servers: backendServers } = await MCPServers.listServers();
+      const backendServer = backendServers.find(s => s.name === server.name);
+
+      // 更新本地存储
+      const newServers = servers.map((s) =>
+        s.id === serverId 
+          ? { 
+              ...s, 
+              ...updates,
+              status: backendServer?.running ? "connected" : "error",
+              error: backendServer?.error || null,
+              config: {
+                ...s.config,
+                ...updates.config,
+                command: backendConfig.command,
+                args: backendConfig.args,
+              },
+            } 
+          : s
+      );
+      saveServers(newServers);
+      setEditingServer(null);
+      
+      if (backendServer && !backendServer.running && backendServer.error) {
+        showToast(`配置已保存，但服务器启动失败: ${backendServer.error}`, "warning");
+      } else {
+        showToast("配置已更新", "success");
+      }
+    } catch (error) {
+      console.error("Failed to save MCP config to backend:", error);
+      showToast("后端保存失败: " + error.message, "error");
+    }
   };
 
   return (
@@ -563,10 +661,18 @@ function ManualAddModal({ onClose, onAdd }) {
       showToast("请输入服务器名称", "warning");
       return;
     }
+    
+    // 确保参数格式正确
+    let processedArgs = args.trim();
+    if (!processedArgs && (name.includes("高德") || name.includes("amap"))) {
+      // 高德地图默认参数
+      processedArgs = "-y @amap/amap-maps-mcp-server";
+    }
+    
     onAdd({
       name: name.trim(),
-      command: command.trim(),
-      args: args.trim(),
+      command: command.trim() || "npx",
+      args: processedArgs,
       apiKey: apiKey.trim(),
       webApiKey: webApiKey.trim(),
     });
@@ -680,8 +786,15 @@ function ManualAddModal({ onClose, onAdd }) {
 function EditServerModal({ server, onClose, onUpdate }) {
   const [name, setName] = useState(server.name || "");
   const [apiKey, setApiKey] = useState(server.config?.apiKey || "");
-  const [command, setCommand] = useState(server.config?.command || "");
-  const [args, setArgs] = useState(server.config?.args || "");
+  const [command, setCommand] = useState(server.config?.command || "npx");
+  // 处理args - 如果是数组，转换为字符串；如果是字符串，直接使用
+  const [args, setArgs] = useState(
+    server.config?.args 
+      ? (Array.isArray(server.config.args) 
+          ? server.config.args.join(" ") 
+          : server.config.args)
+      : ""
+  );
   const [webApiKey, setWebApiKey] = useState(server.config?.webApiKey || "");
 
   const handleSubmit = (e) => {
@@ -690,14 +803,22 @@ function EditServerModal({ server, onClose, onUpdate }) {
       showToast("请输入服务器名称", "warning");
       return;
     }
+    
+    // 确保参数格式正确
+    let processedArgs = args.trim();
+    if (!processedArgs && (name.includes("高德") || name.includes("amap"))) {
+      // 高德地图默认参数
+      processedArgs = "-y @amap/amap-maps-mcp-server";
+    }
+    
     onUpdate({
       name: name.trim(),
       config: {
         ...server.config,
         apiKey: apiKey.trim(),
         webApiKey: webApiKey.trim(),
-        command: command.trim(),
-        args: args.trim(),
+        command: command.trim() || "npx",
+        args: processedArgs,
       },
     });
   };

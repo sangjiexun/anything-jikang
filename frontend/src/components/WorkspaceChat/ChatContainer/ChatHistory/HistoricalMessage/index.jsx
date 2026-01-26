@@ -22,7 +22,6 @@ import { Link } from "react-router-dom";
 import { chatQueryRefusalResponse } from "@/utils/chat";
 import AmapViewer from "@/components/AmapViewer";
 import AmapResult from "@/components/AmapResult";
-import TravelRoutePlanner from "@/components/TravelRoute/TravelRoutePlanner";
 
 const HistoricalMessage = ({
   uuid = v4(),
@@ -225,17 +224,6 @@ const RenderChatContent = memo(
       return mapKeywords.some((keyword) => lowerMessage.includes(keyword));
     }, [role, message]);
 
-    // 检测是否需要显示旅游路线规划
-    const shouldShowTravelRoute = useMemo(() => {
-      if (role !== "assistant" || !message) return false;
-      const lowerMessage = message.toLowerCase();
-      const travelKeywords = [
-        "旅游", "旅行", "路线", "景点", "游玩", "行程", "规划",
-        "推荐", "攻略", "游览", "景区", "景点推荐", "旅游路线"
-      ];
-      return travelKeywords.some((keyword) => lowerMessage.includes(keyword));
-    }, [role, message]);
-
     // 检测是否需要调用地图工具
     const shouldCallAmapTool = useMemo(() => {
       if (role !== "assistant" || !message) return false;
@@ -315,17 +303,12 @@ const RenderChatContent = memo(
             __html: DOMPurify.sanitize(renderMarkdown(msgToRender)),
           }}
         />
-        {shouldShowTravelRoute && (
-          <div className="mt-4">
-            <TravelRoutePlanner query={msgToRender} message={msgToRender} />
-          </div>
-        )}
-        {shouldCallAmapTool && !shouldShowTravelRoute && (
+        {shouldCallAmapTool && (
           <div className="mt-4">
             <AmapResult query={msgToRender} />
           </div>
         )}
-        {shouldShowMap && !shouldCallAmapTool && !shouldShowTravelRoute && amapApiKey && (
+        {shouldShowMap && !shouldCallAmapTool && amapApiKey && (
           <div className="mt-4">
             <AmapViewer apiKey={amapApiKey} height="400px" />
           </div>

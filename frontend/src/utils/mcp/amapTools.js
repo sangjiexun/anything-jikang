@@ -160,62 +160,15 @@ async function callAmapAPI(toolName, params, apiKey) {
       case "maps_geo": {
         // 正向地理编码
         const { address } = params;
-        if (!address || address.trim().length === 0) {
-          return {
-            success: false,
-            data: null,
-            message: "地址参数为空",
-          };
-        }
-        
-        try {
-          const response = await fetch(
-            `${baseURL}/geocode/geo?key=${apiKey}&address=${encodeURIComponent(address)}&output=JSON`
-          );
-          
-          if (!response.ok) {
-            return {
-              success: false,
-              data: null,
-              message: `HTTP错误: ${response.status}`,
-            };
-          }
-          
-          const data = await response.json();
-          
-          // 检查 API 返回的状态
-          if (data.status !== "1") {
-            return {
-              success: false,
-              data: null,
-              message: data.info || data.infocode || "地理编码失败",
-              infocode: data.infocode,
-            };
-          }
-          
-          // 检查是否有返回的地理编码结果
-          if (!data.geocodes || data.geocodes.length === 0) {
-            return {
-              success: false,
-              data: null,
-              message: "未找到匹配的地理编码结果",
-            };
-          }
-          
-          return {
-            success: true,
-            data: data.geocodes[0],
-            message: data.info || "成功",
-          };
-        } catch (error) {
-          console.error("maps_geo API调用异常:", error);
-          return {
-            success: false,
-            data: null,
-            message: error.message || "网络请求失败",
-            error: error,
-          };
-        }
+        const response = await fetch(
+          `${baseURL}/geocode/geo?key=${apiKey}&address=${encodeURIComponent(address)}&output=JSON`
+        );
+        const data = await response.json();
+        return {
+          success: data.status === "1",
+          data: data.geocodes?.[0],
+          message: data.info,
+        };
       }
 
       case "maps_ip_location": {
