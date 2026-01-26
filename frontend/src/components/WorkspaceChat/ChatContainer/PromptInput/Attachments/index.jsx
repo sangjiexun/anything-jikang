@@ -12,6 +12,7 @@ import {
 } from "@phosphor-icons/react";
 import { REMOVE_ATTACHMENT_EVENT } from "../../DnDWrapper";
 import { Tooltip } from "react-tooltip";
+import { useTranslation } from "react-i18next";
 
 /**
  * @param {{attachments: import("../../DnDWrapper").Attachment[]}}
@@ -32,6 +33,7 @@ export default function AttachmentManager({ attachments }) {
  * @param {{attachment: import("../../DnDWrapper").Attachment}}
  */
 function AttachmentItem({ attachment }) {
+  const { t } = useTranslation();
   const { uid, file, status, error, document, type, contentString } =
     attachment;
   const { iconBgColor, Icon } = displayFromFile(file);
@@ -59,7 +61,7 @@ function AttachmentItem({ attachment }) {
             {file.name}
           </p>
           <p className="text-theme-attachment-text-secondary text-[10px] leading-[14px] font-medium">
-            Uploading...
+            {t("chat_window.attachment.uploading")}
           </p>
         </div>
       </div>
@@ -93,7 +95,7 @@ function AttachmentItem({ attachment }) {
               {file.name}
             </p>
             <p className="text-theme-attachment-text-secondary text-[10px] leading-[14px] font-medium truncate">
-              {error ?? "File not embedded!"}
+              {error ?? t("chat_window.attachment.file_not_embedded")}
             </p>
           </div>
         </div>
@@ -112,7 +114,7 @@ function AttachmentItem({ attachment }) {
       <>
         <div
           data-tooltip-id={`attachment-uid-${uid}-success`}
-          data-tooltip-content={`${file.name} will be attached to this prompt. It will not be embedded into the workspace permanently.`}
+          data-tooltip-content={t("chat_window.attachment.will_be_attached", { filename: file.name })}
           className={`relative flex items-center gap-x-1 rounded-lg bg-theme-attachment-success-bg border-none w-[180px] group`}
         >
           <div className="invisible group-hover:visible absolute -top-[5px] -right-[5px] w-fit h-fit z-[10]">
@@ -142,7 +144,7 @@ function AttachmentItem({ attachment }) {
               {file.name}
             </p>
             <p className="text-theme-attachment-text-secondary text-[10px] leading-[14px] font-medium">
-              Image attached!
+              {t("chat_window.attachment.image_attached")}
             </p>
           </div>
         </div>
@@ -162,8 +164,8 @@ function AttachmentItem({ attachment }) {
         data-tooltip-id={`attachment-uid-${uid}-success`}
         data-tooltip-content={
           status === "embedded"
-            ? `${file.name} was uploaded and embedded into this workspace. It will be available for RAG chat now.`
-            : `${file.name} will be used as context for this chat only.`
+            ? t("chat_window.attachment.file_uploaded_embedded", { filename: file.name })
+            : t("chat_window.attachment.file_used_as_context", { filename: file.name })
         }
         className={`relative flex items-center gap-x-1 rounded-lg bg-theme-attachment-bg border-none w-[180px] group`}
       >
@@ -190,7 +192,7 @@ function AttachmentItem({ attachment }) {
             {file.name}
           </p>
           <p className="text-theme-attachment-text-secondary text-[10px] leading-[14px] font-medium">
-            {status === "embedded" ? "File embedded!" : "Added as context!"}
+            {status === "embedded" ? t("chat_window.attachment.file_embedded") : t("chat_window.attachment.added_as_context")}
           </p>
         </div>
       </div>

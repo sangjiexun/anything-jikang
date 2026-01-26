@@ -8,7 +8,8 @@ i18next
   .use(initReactI18next) // Initialize i18n for React
   .use(LanguageDetector)
   .init({
-    fallbackLng: "en",
+    lng: "zh", // 默认语言设置为中文
+    fallbackLng: "zh", // 回退语言也设置为中文
     debug: import.meta.env.DEV,
     defaultNS,
     resources,
