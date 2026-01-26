@@ -37,22 +37,32 @@ export default function WorkflowDesigner() {
   const canvasRef = useRef(null);
   const svgRef = useRef(null);
 
+  // 默认工作流结构
+  const defaultWorkflow = {
+    id: generateId(),
+    name: "新建工作流",
+    nodes: [],
+    connections: [],
+  };
+
   // 工作流状态
   const [workflow, setWorkflow] = useState(() => {
     const saved = localStorage.getItem("workflow_draft");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // 确保必要的字段存在
+        return {
+          ...defaultWorkflow,
+          ...parsed,
+          nodes: Array.isArray(parsed.nodes) ? parsed.nodes : [],
+          connections: Array.isArray(parsed.connections) ? parsed.connections : [],
+        };
       } catch (e) {
         console.error("Failed to load workflow:", e);
       }
     }
-    return {
-      id: generateId(),
-      name: "新建工作流",
-      nodes: [],
-      connections: [],
-    };
+    return defaultWorkflow;
   });
 
   // UI 状态
@@ -163,7 +173,7 @@ export default function WorkflowDesigner() {
   // 复制节点
   const duplicateNode = useCallback(
     (nodeId) => {
-      const node = workflow.nodes.find((n) => n.id === nodeId);
+      const node = (workflow.nodes || []).find((n) => n.id === nodeId);
       if (!node) return;
 
       saveHistory();
@@ -178,7 +188,7 @@ export default function WorkflowDesigner() {
 
       setWorkflow((prev) => ({
         ...prev,
-        nodes: [...prev.nodes, newNode],
+        nodes: [...(prev.nodes || []), newNode],
       }));
 
       setSelectedNode(newNode.id);
@@ -191,7 +201,7 @@ export default function WorkflowDesigner() {
   const createConnection = useCallback(
     (fromNodeId, toNodeId) => {
       // 检查是否已存在相同连接
-      const exists = workflow.connections.some(
+      const exists = (workflow.connections || []).some(
         (c) => c.from === fromNodeId && c.to === toNodeId
       );
       if (exists) return;
@@ -204,7 +214,7 @@ export default function WorkflowDesigner() {
       setWorkflow((prev) => ({
         ...prev,
         connections: [
-          ...prev.connections,
+          ...(prev.connections || []),
           { id: generateId(), from: fromNodeId, to: toNodeId },
         ],
       }));
@@ -299,7 +309,7 @@ export default function WorkflowDesigner() {
   // 节点拖拽开始
   const handleNodeDragStart = (e, nodeId) => {
     e.stopPropagation();
-    const node = workflow.nodes.find((n) => n.id === nodeId);
+    const node = (workflow.nodes || []).find((n) => n.id === nodeId);
     if (!node) return;
 
     setDraggedNode(nodeId);
@@ -319,7 +329,7 @@ export default function WorkflowDesigner() {
 
     if (!isConnecting && isOutput) {
       // 开始连接
-      const node = workflow.nodes.find((n) => n.id === nodeId);
+      const node = (workflow.nodes || []).find((n) => n.id === nodeId);
       if (!node) return;
 
       setIsConnecting(true);
@@ -363,8 +373,8 @@ export default function WorkflowDesigner() {
       // 保存到服务器
       const config = {
         nodes: workflow.nodes,
-        connections: workflow.connections,
-        blocks: workflow.nodes.map((node) => ({
+        connections: workflow.connections || [],
+        blocks: (workflow.nodes || []).map((node) => ({
           id: node.id,
           type: node.type,
           position: { x: node.x, y: node.y },
@@ -394,7 +404,7 @@ export default function WorkflowDesigner() {
 
   // 运行工作流
   const runWorkflow = async () => {
-    if (workflow.nodes.length === 0) {
+    if ((workflow.nodes || []).length === 0) {
       showToast("请先添加节点", "warning");
       return;
     }
@@ -404,7 +414,7 @@ export default function WorkflowDesigner() {
 
     try {
       // 模拟执行
-      for (const node of workflow.nodes) {
+      for (const node of (workflow.nodes || [])) {
         await new Promise((r) => setTimeout(r, 500));
       }
       showToast("工作流执行完成", "success");
@@ -662,9 +672,9 @@ export default function WorkflowDesigner() {
               </defs>
 
               {/* 现有连接 */}
-              {workflow.connections.map((conn) => {
-                const fromNode = workflow.nodes.find((n) => n.id === conn.from);
-                const toNode = workflow.nodes.find((n) => n.id === conn.to);
+              {(workflow.connections || []).map((conn) => {
+                const fromNode = (workflow.nodes || []).find((n) => n.id === conn.from);
+                const toNode = (workflow.nodes || []).find((n) => n.id === conn.to);
                 if (!fromNode || !toNode) return null;
 
                 const x1 = fromNode.x + 180;
@@ -713,7 +723,7 @@ export default function WorkflowDesigner() {
                 transformOrigin: "0 0",
               }}
             >
-              {workflow.nodes.map((node) => {
+              {(workflow.nodes || []).map((node) => {
                 const config = getNodeConfig(node.type);
                 if (!config) return null;
                 const isSelected = selectedNode === node.id;
@@ -825,7 +835,7 @@ export default function WorkflowDesigner() {
             </div>
 
             {/* 空状态 */}
-            {workflow.nodes.length === 0 && (
+            {(workflow.nodes || []).length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center">
                   <Lightning className="w-16 h-16 text-theme-text-secondary/20 mx-auto mb-4" />
@@ -855,7 +865,7 @@ export default function WorkflowDesigner() {
                 </div>
 
                 {(() => {
-                  const node = workflow.nodes.find((n) => n.id === selectedNode);
+                  const node = (workflow.nodes || []).find((n) => n.id === selectedNode);
                   if (!node) return null;
                   const config = getNodeConfig(node.type);
                   if (!config) return null;
