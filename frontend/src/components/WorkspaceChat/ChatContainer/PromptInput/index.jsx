@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import SlashCommandsButton, {
   SlashCommands,
   useSlashCommands,
@@ -30,6 +30,49 @@ export const PROMPT_INPUT_ID = "primary-prompt-input";
 export const PROMPT_INPUT_EVENT = "set_prompt_input";
 const MAX_EDIT_STACK_SIZE = 100;
 
+// 输入框高度持久化的 localStorage key
+const PROMPT_INPUT_HEIGHT_KEY = "anythingllm_prompt_input_height";
+const DEFAULT_INPUT_HEIGHT = 40; // 默认高度
+const MIN_INPUT_HEIGHT = 40; // 最小高度
+const MAX_INPUT_HEIGHT = 400; // 最大高度
+
+/**
+ * 可拖动的调节条组件 - 光柱效果
+ */
+function ResizeHandle({ onResize, isDragging }) {
+  return (
+    <div
+      className={`
+        w-full h-[6px] cursor-ns-resize flex items-center justify-center
+        transition-all duration-200 group
+        ${isDragging ? "bg-gradient-to-r from-transparent via-[#d4a85a] to-transparent" : ""}
+      `}
+      style={{
+        background: isDragging
+          ? "linear-gradient(90deg, transparent 0%, rgba(212, 168, 90, 0.8) 50%, transparent 100%)"
+          : "transparent",
+      }}
+    >
+      {/* 光柱效果 */}
+      <div
+        className={`
+          w-[60px] h-[3px] rounded-full
+          transition-all duration-300
+          ${isDragging
+            ? "bg-gradient-to-r from-[#d4a85a] via-[#f0c674] to-[#d4a85a] shadow-[0_0_12px_rgba(212,168,90,0.8)]"
+            : "bg-gradient-to-r from-transparent via-[#d4a85a]/40 to-transparent group-hover:via-[#d4a85a]/80"
+          }
+        `}
+        style={{
+          boxShadow: isDragging
+            ? "0 0 15px rgba(212, 168, 90, 0.6), 0 0 30px rgba(212, 168, 90, 0.3)"
+            : "none",
+        }}
+      />
+    </div>
+  );
+}
+
 export default function PromptInput({
   submit,
   onChange,
@@ -48,6 +91,65 @@ export default function PromptInput({
   const undoStack = useRef([]);
   const redoStack = useRef([]);
   const { textSizeClass } = useTextSize();
+
+  // 输入框高度状态 - 从 localStorage 读取
+  const [inputHeight, setInputHeight] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(PROMPT_INPUT_HEIGHT_KEY);
+      return saved ? Math.max(MIN_INPUT_HEIGHT, Math.min(MAX_INPUT_HEIGHT, parseInt(saved, 10))) : DEFAULT_INPUT_HEIGHT;
+    }
+    return DEFAULT_INPUT_HEIGHT;
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+  const dragStartHeight = useRef(0);
+
+  // 保存高度到 localStorage
+  const saveHeight = useCallback((height) => {
+    const clampedHeight = Math.max(MIN_INPUT_HEIGHT, Math.min(MAX_INPUT_HEIGHT, height));
+    localStorage.setItem(PROMPT_INPUT_HEIGHT_KEY, clampedHeight.toString());
+  }, []);
+
+  // 拖动开始
+  const handleDragStart = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartY.current = e.clientY || e.touches?.[0]?.clientY || 0;
+    dragStartHeight.current = inputHeight;
+  }, [inputHeight]);
+
+  // 拖动中
+  const handleDragMove = useCallback((e) => {
+    if (!isDragging) return;
+    const currentY = e.clientY || e.touches?.[0]?.clientY || 0;
+    const delta = dragStartY.current - currentY; // 向上拖动增加高度
+    const newHeight = Math.max(MIN_INPUT_HEIGHT, Math.min(MAX_INPUT_HEIGHT, dragStartHeight.current + delta));
+    setInputHeight(newHeight);
+  }, [isDragging]);
+
+  // 拖动结束
+  const handleDragEnd = useCallback(() => {
+    if (isDragging) {
+      setIsDragging(false);
+      saveHeight(inputHeight);
+    }
+  }, [isDragging, inputHeight, saveHeight]);
+
+  // 添加全局鼠标/触摸事件监听
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener("mousemove", handleDragMove);
+      window.addEventListener("mouseup", handleDragEnd);
+      window.addEventListener("touchmove", handleDragMove);
+      window.addEventListener("touchend", handleDragEnd);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleDragMove);
+      window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchmove", handleDragMove);
+      window.removeEventListener("touchend", handleDragEnd);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
 
   // Synchronizes prompt input value with localStorage, scoped to the current thread.
   usePromptInputStorage({
@@ -270,6 +372,15 @@ export default function PromptInput({
       >
         <div className="flex items-center rounded-lg md:mb-4 md:w-full">
           <div className="w-[95vw] md:w-[635px] bg-theme-bg-chat-input light:bg-white light:border-solid light:border-[1px] light:border-theme-chat-input-border shadow-sm rounded-2xl pwa:rounded-3xl flex flex-col px-2 overflow-hidden">
+            {/* 可拖动的调节条 - 光柱效果 */}
+            <div
+              onMouseDown={handleDragStart}
+              onTouchStart={handleDragStart}
+              className="select-none"
+            >
+              <ResizeHandle onResize={handleDragMove} isDragging={isDragging} />
+            </div>
+
             <AttachmentManager attachments={attachments} />
             <div className="flex items-center border-b border-theme-chat-input-border mx-3">
               <textarea
@@ -289,7 +400,11 @@ export default function PromptInput({
                 }}
                 value={promptInput}
                 spellCheck={Appearance.get("enableSpellCheck")}
-                className={`border-none cursor-text max-h-[50vh] md:max-h-[350px] md:min-h-[40px] mx-2 md:mx-0 pt-[12px] w-full leading-5 text-white bg-transparent placeholder:text-white/60 light:placeholder:text-theme-text-primary resize-none active:outline-none focus:outline-none flex-grow mb-1 pwa:!text-[16px] ${textSizeClass}`}
+                style={{
+                  minHeight: `${inputHeight}px`,
+                  maxHeight: `${Math.max(inputHeight, 350)}px`,
+                }}
+                className={`border-none cursor-text mx-2 md:mx-0 pt-[12px] w-full leading-5 text-white bg-transparent placeholder:text-white/60 light:placeholder:text-theme-text-primary resize-none active:outline-none focus:outline-none flex-grow mb-1 pwa:!text-[16px] ${textSizeClass}`}
                 placeholder={t("chat_window.send_message")}
               />
               {isStreaming ? (
