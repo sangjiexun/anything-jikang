@@ -2,116 +2,102 @@ import React, { useState, useEffect, useRef } from "react";
 import { callAmapTool, getAmapMCPConfig } from "@/utils/mcp/amapTools";
 import { MapPin, Compass, Clock, Star, X, CaretRight } from "@phosphor-icons/react";
 
-// HUD风格地图组件（使用高德地图 + Loca.js）
-function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
+// HUD风格地图组件（使用MapLibre GL JS - 2025最新开源地图框架）
+function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const locaInstanceRef = useRef(null);
   const markersRef = useRef([]);
-  const routeLayerRef = useRef(null);
-  const hoverInfoRef = useRef(null);
+  const routeSourceRef = useRef(null);
+  const animationFrameRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [hoveredPoi, setHoveredPoi] = useState(null);
 
   useEffect(() => {
-    if (!mapRef.current || !apiKey) return;
+    if (!mapRef.current) return;
 
-    // 加载高德地图脚本
-    const loadAmapScript = () => {
+    // 加载MapLibre GL JS（2025最新版本 v5.16.0）
+    const loadMapLibre = () => {
       return new Promise((resolve, reject) => {
         // 检查是否已加载
-        if (window.AMap && window.Loca) {
+        if (window.maplibregl) {
           resolve();
           return;
         }
 
-        // 加载 jQuery (如果需要)
-        if (!window.jQuery) {
-          const jqScript = document.createElement("script");
-          jqScript.src = "//g.alicdn.com/code/lib/jquery/1.11.3/jquery.min.js";
-          jqScript.crossOrigin = "anonymous";
-          document.head.appendChild(jqScript);
-        }
+        // 加载MapLibre GL CSS
+        const link = document.createElement("link");
+        link.href = "https://unpkg.com/maplibre-gl@5.16.0/dist/maplibre-gl.css";
+        link.rel = "stylesheet";
+        document.head.appendChild(link);
 
-        // 检查是否已加载
-        if (window.AMap && window.Loca) {
-          setMapLoaded(true);
-          resolve();
-          return;
-        }
-
-        // 加载高德地图 JS API - 使用v2.0以支持Loca.js
-        const amapScript = document.createElement("script");
-        amapScript.src = `https://webapi.amap.com/maps?v=2.0&key=${apiKey}`;
-        amapScript.async = true;
-        amapScript.defer = true;
-        
-        amapScript.onload = () => {
-          if (window.AMap) {
-            // 加载Loca.js用于流动路线动画
-            if (!window.Loca) {
-              const locaScript = document.createElement("script");
-              locaScript.src = `https://webapi.amap.com/loca?v=2.0.0&key=${apiKey}`;
-              locaScript.async = true;
-              locaScript.defer = true;
-              locaScript.onload = () => {
-                if (window.Loca) {
-                  setMapLoaded(true);
-                  resolve();
-                } else {
-                  reject(new Error("Loca.js加载失败"));
-                }
-              };
-              locaScript.onerror = () => {
-                reject(new Error("Loca.js加载失败"));
-              };
-              document.head.appendChild(locaScript);
-            } else {
-              setMapLoaded(true);
-              resolve();
-            }
+        // 加载MapLibre GL JS
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/maplibre-gl@5.16.0/dist/maplibre-gl.js";
+        script.onload = () => {
+          if (window.maplibregl) {
+            resolve();
           } else {
-            reject(new Error("地图API加载失败"));
+            reject(new Error("MapLibre GL JS加载失败"));
           }
         };
-        
-        amapScript.onerror = () => {
-          reject(new Error("高德地图加载失败"));
-        };
-        
-        document.head.appendChild(amapScript);
+        script.onerror = () => reject(new Error("MapLibre GL JS加载失败"));
+        document.head.appendChild(script);
       });
     };
 
-    loadAmapScript()
+    loadMapLibre()
       .then(() => {
-        if (!window.AMap || !mapRef.current) return;
+        if (!window.maplibregl || !mapRef.current) return;
 
         // 初始化地图 - HUD风格（深色主题，3D视角）
-        const map = new window.AMap.Map(mapRef.current, {
-          zoom: zoom,
+        const map = new window.maplibregl.Map({
+          container: mapRef.current,
+          style: {
+            version: 8,
+            sources: {
+              "raster-tiles": {
+                type: "raster",
+                tiles: [
+                  "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                ],
+                tileSize: 256,
+                attribution: "© OpenStreetMap contributors"
+              }
+            },
+            layers: [
+              {
+                id: "simple-tiles",
+                type: "raster",
+                source: "raster-tiles",
+                minzoom: 0,
+                maxzoom: 22
+              }
+            ],
+            glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
+          },
           center: center || [116.397428, 39.90923],
-          viewMode: "3D", // 3D视角
-          pitch: 60, // 俯仰角
-          rotation: -15, // 旋转角度
-          mapStyle: "amap://styles/dark", // 深色HUD风格
-          showLabel: false,
-          resizeEnable: true,
+          zoom: zoom,
+          pitch: 60, // 3D俯仰角
+          bearing: -15, // 旋转角度
         });
 
-        map.on("complete", () => {
+        // 添加深色滤镜（HUD风格）
+        map.on("load", () => {
+          // 添加深色滤镜图层
+          map.addLayer({
+            id: "dark-filter",
+            type: "background",
+            paint: {
+              "background-color": "#0a0a0a",
+              "background-opacity": 0.3
+            }
+          });
+
           setMapLoaded(true);
           mapInstanceRef.current = map;
 
-          // 创建Loca容器用于流动路线
-          if (window.Loca && !locaInstanceRef.current) {
-            locaInstanceRef.current = new window.Loca.Container({
-              map: map,
-            });
-          }
-
           // 绘制流动路线
-          if (route && route.length > 0 && window.Loca) {
+          if (route && route.length > 0) {
             drawAnimatedRoute(map, route);
           }
 
@@ -138,9 +124,14 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
           }
           
           if (validBounds.length > 0) {
-            const bounds = new window.AMap.Bounds();
-            validBounds.forEach((coord) => bounds.extend(coord));
-            map.setBounds(bounds);
+            const bounds = validBounds.reduce((bounds, coord) => {
+              return bounds.extend(coord);
+            }, new window.maplibregl.LngLatBounds(validBounds[0], validBounds[0]));
+            
+            map.fitBounds(bounds, {
+              padding: 50,
+              duration: 1000
+            });
           }
         });
       })
@@ -232,9 +223,9 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
     );
   };
 
-  // 绘制流动路线（使用Loca.js PulseLineLayer）
+  // 绘制流动路线（使用MapLibre GL JS + 自定义动画）
   const drawAnimatedRoute = (map, routeCoords) => {
-    if (!window.Loca || !locaInstanceRef.current || !routeCoords || routeCoords.length < 2) return;
+    if (!map || !routeCoords || routeCoords.length < 2) return;
 
     try {
       // 验证并过滤无效坐标
@@ -245,60 +236,106 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
       }
 
       // 先清理旧的路线图层
-      if (routeLayerRef.current && locaInstanceRef.current) {
-        try {
-          locaInstanceRef.current.remove(routeLayerRef.current);
-        } catch (e) {
-          // 忽略清理错误
-        }
-        routeLayerRef.current = null;
+      if (map.getLayer("route-animated")) {
+        map.removeLayer("route-animated");
+      }
+      if (map.getLayer("route-static")) {
+        map.removeLayer("route-static");
+      }
+      if (map.getSource("route")) {
+        map.removeSource("route");
       }
 
-      const loca = locaInstanceRef.current;
-
       // 创建GeoJSON数据源
-      const geo = new window.Loca.GeoJSONSource({
-        data: {
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: validCoords,
-          },
+      const geojson = {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: validCoords,
+        },
+      };
+
+      map.addSource("route", {
+        type: "geojson",
+        data: geojson,
+      });
+
+      // 绘制静态路线作为背景
+      map.addLayer({
+        id: "route-static",
+        type: "line",
+        source: "route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#00ff88",
+          "line-width": 4,
+          "line-opacity": 0.8,
         },
       });
 
-      // 创建脉冲线图层（流动路线）
-      const layer = new window.Loca.PulseLineLayer({
-        zIndex: 10,
-        opacity: 1,
-        visible: true,
-        zooms: [2, 22],
-      });
+      // 绘制流动动画路线
+      let animationProgress = 0;
+      const animateRoute = () => {
+        animationProgress = (animationProgress + 0.02) % 1;
 
-      layer.setSource(geo);
-      layer.setStyle({
-        altitude: 0,
-        lineWidth: 8,
-        headColor: "#00ffff", // 青色脉冲头
-        trailColor: "rgba(0, 255, 136, 0.6)", // 绿色脉冲尾
-        interval: 1,
-        duration: 3000, // 3秒跑完整段路
-      });
+        // 计算动画路径
+        const animatedCoords = [];
+        for (let i = 0; i < validCoords.length - 1; i++) {
+          const start = validCoords[i];
+          const end = validCoords[i + 1];
+          const segmentProgress = Math.max(0, Math.min(1, (animationProgress * validCoords.length) - i));
+          
+          if (segmentProgress > 0 && segmentProgress <= 1) {
+            const animatedPoint = [
+              start[0] + (end[0] - start[0]) * segmentProgress,
+              start[1] + (end[1] - start[1]) * segmentProgress,
+            ];
+            animatedCoords.push(animatedPoint);
+          }
+        }
 
-      loca.add(layer);
-      loca.animate.start();
-      routeLayerRef.current = layer;
+        if (animatedCoords.length > 0) {
+          const animatedGeojson = {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: animatedCoords,
+            },
+          };
 
-      // 同时绘制静态路线作为背景
-      const staticPolyline = new window.AMap.Polyline({
-        path: validCoords,
-        strokeColor: "#00ff88",
-        strokeWeight: 4,
-        strokeOpacity: 0.8,
-        lineJoin: "round",
-        lineCap: "round",
-      });
-      staticPolyline.setMap(map);
+          if (map.getSource("route-animated")) {
+            map.getSource("route-animated").setData(animatedGeojson);
+          } else {
+            map.addSource("route-animated", {
+              type: "geojson",
+              data: animatedGeojson,
+            });
+
+            map.addLayer({
+              id: "route-animated",
+              type: "line",
+              source: "route-animated",
+              layout: {
+                "line-join": "round",
+                "line-cap": "round",
+              },
+              paint: {
+                "line-color": "#00ffff",
+                "line-width": 6,
+                "line-opacity": 0.9,
+              },
+            });
+          }
+        }
+
+        animationFrameRef.current = requestAnimationFrame(animateRoute);
+      };
+
+      animateRoute();
+      routeSourceRef.current = "route";
     } catch (error) {
       console.error("绘制流动路线失败:", error);
     }
@@ -306,21 +343,15 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
 
   // 绘制科技感坐标标记
   const drawTechMarkers = (map, pois) => {
-    if (!window.AMap || !pois || pois.length === 0) return;
+    if (!map || !pois || pois.length === 0) return;
 
     try {
       // 清理旧标记
       if (markersRef.current && markersRef.current.length > 0) {
         markersRef.current.forEach((marker) => {
           try {
-            if (marker && marker.setMap) {
-              marker.setMap(null);
-              // 移除事件监听器
-              if (marker.off) {
-                marker.off("mouseover");
-                marker.off("mouseout");
-                marker.off("click");
-              }
+            if (marker && marker.remove) {
+              marker.remove();
             }
           } catch (e) {
             // 忽略单个标记清理错误
@@ -342,39 +373,44 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
           const validPosition = [Number(lng), Number(lat)];
 
           // 创建科技感自定义图标
-          const icon = new window.AMap.Icon({
-            size: new window.AMap.Size(40, 40),
-            image: createTechMarkerIcon(poi, index),
-            imageSize: new window.AMap.Size(40, 40),
-          });
+          const iconUrl = createTechMarkerIcon(poi, index);
 
-          // 创建标记
-          const marker = new window.AMap.Marker({
-            position: validPosition,
-            icon: icon,
-            title: poi.name,
-            zIndex: 100 + index,
-          });
+          // 创建DOM元素作为标记
+          const el = document.createElement("div");
+          el.className = "tech-marker";
+          el.style.width = "40px";
+          el.style.height = "40px";
+          el.style.backgroundImage = `url(${iconUrl})`;
+          el.style.backgroundSize = "contain";
+          el.style.cursor = "pointer";
+          el.title = poi.name || `景点 ${index + 1}`;
+
+          // 创建MapLibre标记
+          const marker = new window.maplibregl.Marker({
+            element: el,
+            anchor: "center",
+          })
+            .setLngLat(validPosition)
+            .addTo(map);
 
           // 鼠标悬停显示卡片
-          marker.on("mouseover", () => {
+          el.addEventListener("mouseenter", () => {
             setHoveredPoi(poi);
-            showHoverCard(map, poi, marker);
+            showHoverCard(map, poi, validPosition);
           });
 
-          marker.on("mouseout", () => {
+          el.addEventListener("mouseleave", () => {
             setHoveredPoi(null);
             hideHoverCard();
           });
 
           // 点击事件
-          marker.on("click", () => {
+          el.addEventListener("click", () => {
             if (onPoiClick) {
               onPoiClick({ id: index, name: poi.name, description: poi.description });
             }
           });
 
-          marker.setMap(map);
           markersRef.current.push(marker);
         } catch (error) {
           console.warn(`创建标记 ${index} 失败:`, error);
@@ -425,12 +461,11 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
   };
 
   // 显示悬停卡片
-  const showHoverCard = (map, poi, marker) => {
-    if (!map || !marker || hoverInfoRef.current) return;
+  const showHoverCard = (map, poi, position) => {
+    if (!map || !position || hoverInfoRef.current) return;
 
     try {
-      const position = marker.getPosition();
-      if (!position || !isValidCoordinate([position.lng, position.lat])) {
+      if (!isValidCoordinate(position)) {
         console.warn("标记位置无效，无法显示悬停卡片");
         return;
       }
@@ -456,14 +491,16 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
         </div>
       `;
 
-      const infoWindow = new window.AMap.InfoWindow({
-        content: content,
-        offset: new window.AMap.Pixel(0, -40),
-        closeWhenClickMap: false,
-      });
+      const popup = new window.maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: [0, -40],
+      })
+        .setLngLat(position)
+        .setHTML(content)
+        .addTo(map);
 
-      infoWindow.open(map, position);
-      hoverInfoRef.current = infoWindow;
+      hoverInfoRef.current = popup;
     } catch (error) {
       console.warn("显示悬停卡片失败:", error);
     }
@@ -472,7 +509,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
   // 隐藏悬停卡片
   const hideHoverCard = () => {
     if (hoverInfoRef.current) {
-      hoverInfoRef.current.close();
+      hoverInfoRef.current.remove();
       hoverInfoRef.current = null;
     }
   };
@@ -889,7 +926,6 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
           </div>
         ) : (
           <HUDMap
-            apiKey={getAmapMCPConfig()?.apiKey || getAmapMCPConfig()?.webApiKey}
             center={attractions[0]?.coordinates || [116.397428, 39.90923]}
             zoom={13}
             route={route}
