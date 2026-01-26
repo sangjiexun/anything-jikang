@@ -23,8 +23,6 @@ import SpeechRecognition, {
 import { ChatTooltips } from "./ChatTooltips";
 import { MetricsProvider } from "./ChatHistory/HistoricalMessage/Actions/RenderMetrics";
 import LLMSelectorTop from "@/components/LLMSelector";
-import FlashcardViewer from "@/components/Flashcard/FlashcardViewer";
-import { X } from "@phosphor-icons/react";
 
 export default function ChatContainer({ workspace, knownHistory = [] }) {
   const { threadSlug = null } = useParams();
@@ -33,7 +31,6 @@ export default function ChatContainer({ workspace, knownHistory = [] }) {
   const [chatHistory, setChatHistory] = useState(knownHistory);
   const [socketId, setSocketId] = useState(null);
   const [websocket, setWebsocket] = useState(null);
-  const [flashcards, setFlashcards] = useState(null);
   const { files, parseAttachments } = useContext(DndUploaderContext);
 
   // Maintain state of message from whatever is in PromptInput
@@ -230,18 +227,32 @@ export default function ChatContainer({ workspace, knownHistory = [] }) {
     loadingResponse === true && fetchReply();
   }, [loadingResponse, chatHistory, workspace]);
 
-  // 监听闪卡显示事件
+  // 监听闪卡添加到聊天历史事件
   useEffect(() => {
-    const handleShowFlashcards = (event) => {
-      const { flashcards: flashcardData } = event.detail;
-      if (flashcardData && flashcardData.flashcards) {
-        setFlashcards(flashcardData.flashcards);
+    const handleAddFlashcard = (event) => {
+      const { detail } = event;
+      if (detail && detail.type === "flashcard") {
+        setChatHistory((prev) => [
+          ...prev,
+          {
+            uuid: v4(),
+            type: "flashcard",
+            flashcards: detail.flashcards,
+            content: detail.content || "问答闪卡",
+            role: detail.role || "assistant",
+            sources: [],
+            closed: true,
+            error: null,
+            animate: false,
+            pending: false,
+          },
+        ]);
       }
     };
 
-    window.addEventListener("show-flashcards", handleShowFlashcards);
+    window.addEventListener("add-flashcard-to-chat", handleAddFlashcard);
     return () => {
-      window.removeEventListener("show-flashcards", handleShowFlashcards);
+      window.removeEventListener("add-flashcard-to-chat", handleAddFlashcard);
     };
   }, []);
 
@@ -340,24 +351,6 @@ export default function ChatContainer({ workspace, knownHistory = [] }) {
             hasAttachments={files.length > 0}
           />
         </MetricsProvider>
-        
-        {/* 闪卡查看器 */}
-        {flashcards && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary border border-theme-sidebar-border rounded-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto p-6 relative">
-              <button
-                onClick={() => setFlashcards(null)}
-                className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded transition-colors"
-              >
-                <X className="w-5 h-5 text-white/60" />
-              </button>
-              <FlashcardViewer
-                flashcards={flashcards}
-                onClose={() => setFlashcards(null)}
-              />
-            </div>
-          </div>
-        )}
 
         <PromptInput
           submit={handleSubmit}

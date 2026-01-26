@@ -453,7 +453,7 @@ ${message.substring(0, 8000)}`;
         return;
       }
 
-      // 保存闪卡数据
+      // 保存闪卡数据并添加到聊天历史
       const flashcardData = {
         flashcards,
         config: {
@@ -464,11 +464,16 @@ ${message.substring(0, 8000)}`;
         references,
       };
 
-      localStorage.setItem("flashcard_data", JSON.stringify(flashcardData));
-
-      // 触发闪卡显示事件
+      // 触发闪卡添加到聊天历史事件
       window.dispatchEvent(
-        new CustomEvent("show-flashcards", { detail: flashcardData })
+        new CustomEvent("add-flashcard-to-chat", { 
+          detail: {
+            type: "flashcard",
+            flashcards: flashcards,
+            content: `已生成 ${flashcards.length} 道${difficultyMap[difficulty]}难度的问答题目`,
+            role: "assistant",
+          }
+        })
       );
 
       onClose();

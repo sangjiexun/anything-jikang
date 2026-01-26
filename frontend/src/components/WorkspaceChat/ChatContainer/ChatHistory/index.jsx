@@ -8,6 +8,7 @@ import { ArrowDown } from "@phosphor-icons/react";
 import debounce from "lodash.debounce";
 import useUser from "@/hooks/useUser";
 import Chartable from "./Chartable";
+import FlashcardMessage from "./FlashcardMessage";
 import Workspace from "@/models/workspace";
 import { useParams } from "react-router-dom";
 import paths from "@/utils/paths";
@@ -317,6 +318,10 @@ function buildMessages({
     if (props.type === "rechartVisualize" && !!props.content) {
       acc.push(
         <Chartable key={props.uuid} workspace={workspace} props={props} />
+      );
+    } else if (props.type === "flashcard" && props.flashcards) {
+      acc.push(
+        <FlashcardMessage key={props.uuid || index} props={props} />
       );
     } else if (isLastBotReply && props.animate) {
       acc.push(
