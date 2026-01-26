@@ -59,7 +59,7 @@ export default function WorkflowDesigner() {
   const [selectedNode, setSelectedNode] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState(
-    NODE_CATEGORIES.map((c) => c.id)
+    NODE_CATEGORIES?.map((c) => c.id) || []
   );
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -434,15 +434,17 @@ export default function WorkflowDesigner() {
 
   // 过滤节点
   const filteredCategories = useMemo(() => {
+    if (!NODE_CATEGORIES) return [];
     if (!searchQuery) return NODE_CATEGORIES;
 
     const query = searchQuery.toLowerCase();
     return NODE_CATEGORIES.map((cat) => ({
       ...cat,
-      nodes: cat.nodes.filter((nodeType) => {
-        const config = NODE_TYPES[nodeType];
+      nodes: (cat.nodes || []).filter((nodeType) => {
+        const config = NODE_TYPES?.[nodeType];
+        if (!config) return false;
         return (
-          config.title.toLowerCase().includes(query) ||
+          config.title?.toLowerCase().includes(query) ||
           nodeType.toLowerCase().includes(query)
         );
       }),
