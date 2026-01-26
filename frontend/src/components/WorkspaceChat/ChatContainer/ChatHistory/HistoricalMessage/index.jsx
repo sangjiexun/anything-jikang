@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useMemo } from "react";
 import { Info, Warning } from "@phosphor-icons/react";
 import UserIcon from "../../../../UserIcon";
 import Actions from "./Actions";
@@ -20,6 +20,7 @@ import paths from "@/utils/paths";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { chatQueryRefusalResponse } from "@/utils/chat";
+import AmapViewer from "@/components/AmapViewer";
 
 const HistoricalMessage = ({
   uuid = v4(),
@@ -213,6 +214,34 @@ function ChatAttachments({ attachments = [] }) {
 
 const RenderChatContent = memo(
   ({ role, message, expanded = false }) => {
+    // 检测是否需要显示地图
+    const shouldShowMap = useMemo(() => {
+      if (role !== "assistant" || !message) return false;
+      const lowerMessage = message.toLowerCase();
+      const mapKeywords = ["地图", "位置", "高德", "amap", "定位", "坐标", "地点", "位置服务"];
+      return mapKeywords.some((keyword) => lowerMessage.includes(keyword));
+    }, [role, message]);
+
+    // 获取高德地图 API Key
+    const amapApiKey = useMemo(() => {
+      try {
+        const saved = localStorage.getItem("anythingllm_mcp_servers");
+        if (saved) {
+          const servers = JSON.parse(saved);
+          const amapServer = servers.find(
+            (s) =>
+              s.name.toLowerCase().includes("高德") ||
+              s.name.toLowerCase().includes("amap") ||
+              s.name.toLowerCase().includes("地图")
+          );
+          return amapServer?.config?.webApiKey || amapServer?.config?.apiKey;
+        }
+      } catch (e) {
+        console.error("Failed to load MCP servers:", e);
+      }
+      return null;
+    }, []);
+
     // If the message is not from the assistant, we can render it directly
     // as normal since the user cannot think (lol)
     if (role !== "assistant")
@@ -259,6 +288,11 @@ const RenderChatContent = memo(
             __html: DOMPurify.sanitize(renderMarkdown(msgToRender)),
           }}
         />
+        {shouldShowMap && amapApiKey && (
+          <div className="mt-4">
+            <AmapViewer apiKey={amapApiKey} height="400px" />
+          </div>
+        )}
       </>
     );
   },

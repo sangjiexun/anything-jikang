@@ -14,6 +14,8 @@ import {
   CloudArrowUp,
   Folder,
   Terminal,
+  Pencil,
+  MapPin,
 } from "@phosphor-icons/react";
 import showToast from "@/utils/toast";
 import { useTranslation } from "react-i18next";
@@ -24,6 +26,7 @@ const SERVER_ICONS = {
   docker: { icon: Terminal, color: "bg-blue-500" },
   filesystem: { icon: Folder, color: "bg-orange-500" },
   github: { icon: GithubLogo, color: "bg-gray-700" },
+  map: { icon: MapPin, color: "bg-green-500" },
   default: { icon: Globe, color: "bg-purple-500" },
 };
 
@@ -42,6 +45,9 @@ const getServerIcon = (name) => {
   if (lowerName.includes("github")) {
     return SERVER_ICONS["github"];
   }
+  if (lowerName.includes("地图") || lowerName.includes("map") || lowerName.includes("高德") || lowerName.includes("amap")) {
+    return SERVER_ICONS["map"];
+  }
   return SERVER_ICONS["default"];
 };
 
@@ -55,6 +61,7 @@ export default function MCPConfig({ workspace }) {
   const [expandedServer, setExpandedServer] = useState(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
+  const [editingServer, setEditingServer] = useState(null);
 
   // 加载 MCP 服务器列表
   useEffect(() => {
@@ -69,6 +76,17 @@ export default function MCPConfig({ workspace }) {
       } else {
         // 默认示例服务器
         const defaultServers = [
+          {
+            id: "amap",
+            name: "高德地图",
+            status: "connected",
+            enabled: true,
+            type: "manual",
+            config: {
+              apiKey: "671a340b83a6c56c1ac80779984ab086",
+              webApiKey: "671a340b83a6c56c1ac80779984ab086",
+            },
+          },
           {
             id: "google-drive",
             name: "Google Drive",
@@ -184,6 +202,15 @@ export default function MCPConfig({ workspace }) {
     saveServers(newServers);
     setShowManualModal(false);
     showToast("MCP 服务器已添加", "success");
+  };
+
+  const updateServer = (serverId, updates) => {
+    const newServers = servers.map((s) =>
+      s.id === serverId ? { ...s, ...updates } : s
+    );
+    saveServers(newServers);
+    setEditingServer(null);
+    showToast("配置已更新", "success");
   };
 
   return (
@@ -350,7 +377,42 @@ export default function MCPConfig({ workspace }) {
                         {server.status === "connected" ? "已连接" : "连接失败"}
                       </span>
                     </div>
+                    {server.config && (
+                      <>
+                        {server.config.apiKey && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-white/60">API Key</span>
+                            <span className="text-white font-mono text-xs">
+                              {server.config.apiKey.substring(0, 8)}...
+                            </span>
+                          </div>
+                        )}
+                        {server.config.command && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-white/60">命令</span>
+                            <span className="text-white font-mono text-xs">
+                              {server.config.command}
+                            </span>
+                          </div>
+                        )}
+                        {server.config.args && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-white/60">参数</span>
+                            <span className="text-white font-mono text-xs truncate max-w-[200px]">
+                              {server.config.args}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
                     <div className="flex justify-end gap-2 mt-4">
+                      <button
+                        onClick={() => setEditingServer(server)}
+                        className="px-3 py-1.5 text-sm bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors flex items-center gap-1"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        编辑配置
+                      </button>
                       <button
                         onClick={() => retryConnection(server.id)}
                         className="px-3 py-1.5 text-sm bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
@@ -385,6 +447,15 @@ export default function MCPConfig({ workspace }) {
         <ManualAddModal
           onClose={() => setShowManualModal(false)}
           onAdd={addManualServer}
+        />
+      )}
+
+      {/* 编辑配置弹窗 */}
+      {editingServer && (
+        <EditServerModal
+          server={editingServer}
+          onClose={() => setEditingServer(null)}
+          onUpdate={(updates) => updateServer(editingServer.id, updates)}
         />
       )}
     </div>
@@ -474,6 +545,142 @@ function ManualAddModal({ onClose, onAdd }) {
               className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
               添加
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// 编辑服务器配置弹窗组件
+function EditServerModal({ server, onClose, onUpdate }) {
+  const [name, setName] = useState(server.name || "");
+  const [apiKey, setApiKey] = useState(server.config?.apiKey || "");
+  const [command, setCommand] = useState(server.config?.command || "");
+  const [args, setArgs] = useState(server.config?.args || "");
+  const [webApiKey, setWebApiKey] = useState(server.config?.webApiKey || "");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      showToast("请输入服务器名称", "warning");
+      return;
+    }
+    onUpdate({
+      name: name.trim(),
+      config: {
+        ...server.config,
+        apiKey: apiKey.trim(),
+        webApiKey: webApiKey.trim(),
+        command: command.trim(),
+        args: args.trim(),
+      },
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-theme-bg-secondary border border-theme-sidebar-border rounded-xl w-[600px] max-w-[90vw] shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b border-theme-sidebar-border sticky top-0 bg-theme-bg-secondary z-10">
+          <h2 className="text-lg font-semibold text-white">编辑 MCP 服务器配置</h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-white/10 rounded transition-colors"
+          >
+            <X className="w-5 h-5 text-white/60" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div>
+            <label className="block text-sm text-white/60 mb-2">服务器名称</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="例如: 高德地图"
+              className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-white/60 mb-2">
+              API Key (Web 服务)
+            </label>
+            <input
+              type="text"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="例如: 671a340b83a6c56c1ac80779984ab086"
+              className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+            />
+            <p className="text-xs text-white/40 mt-1">
+              用于后端 API 调用的密钥
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm text-white/60 mb-2">
+              Web API Key (前端地图)
+            </label>
+            <input
+              type="text"
+              value={webApiKey}
+              onChange={(e) => setWebApiKey(e.target.value)}
+              placeholder="例如: 671a340b83a6c56c1ac80779984ab086"
+              className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+            />
+            <p className="text-xs text-white/40 mt-1">
+              用于前端地图显示的密钥（高德地图需要单独的 Web 端 Key）
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm text-white/60 mb-2">命令 (可选)</label>
+            <input
+              type="text"
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              placeholder="例如: npx"
+              className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-white/60 mb-2">参数 (可选)</label>
+            <input
+              type="text"
+              value={args}
+              onChange={(e) => setArgs(e.target.value)}
+              placeholder="例如: -y @anthropic/mcp-server-name"
+              className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div className="text-sm text-white/40 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+            <p className="font-medium text-blue-400 mb-1">高德地图配置示例：</p>
+            <p className="text-xs">
+              • API Key: 671a340b83a6c56c1ac80779984ab086 (Web 服务 Key)
+            </p>
+            <p className="text-xs">
+              • Web API Key: 671a340b83a6c56c1ac80779984ab086 (Web 端 Key，用于地图显示)
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-theme-sidebar-border">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-white/60 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              保存
             </button>
           </div>
         </form>
