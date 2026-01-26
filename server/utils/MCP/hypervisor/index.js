@@ -467,25 +467,10 @@ class MCPHypervisor {
     // 增加超时时间到60秒，因为某些MCP服务器（如npx启动的）需要更多时间
     const connectionTimeout = 60_000; // 60 second timeout
     
-    // 监听服务器响应，确保初始化完成
-    let initializeComplete = false;
-    let initializePromiseResolve = null;
-    const initializePromise = new Promise((resolve) => {
-      initializePromiseResolve = resolve;
-    });
-    
+    // 监听服务器响应
     const originalOnMessage = transport.onmessage;
     transport.onmessage = (message) => {
       this.log(`${name} - Transport message:`, message);
-      
-      // 检查是否是初始化响应
-      if (message && message.result && message.result.protocolVersion) {
-        this.log(`${name} - Received initialize response, protocol version: ${message.result.protocolVersion}`);
-        initializeComplete = true;
-        if (initializePromiseResolve) {
-          initializePromiseResolve();
-        }
-      }
       
       // 调用原始的消息处理器
       if (originalOnMessage) {
@@ -493,27 +478,9 @@ class MCPHypervisor {
       }
     };
     
-    const connectionPromise = mcp.connect(transport).then(async () => {
-      // 连接成功后，等待初始化响应
-      // 某些MCP服务器（特别是npx启动的）需要额外时间来完成初始化
-      // 但connect()方法本身应该已经等待了初始化，所以这里只等待最多5秒
-      try {
-        await Promise.race([
-          initializePromise,
-          new Promise((resolve) => setTimeout(resolve, 5000))
-        ]);
-      } catch (e) {
-        // 忽略错误，继续执行
-      }
-      
-      if (!initializeComplete) {
-        this.log(`${name} - Warning: Initialize response not received, but connect() completed, continuing anyway`);
-      } else {
-        this.log(`${name} - Initialize response confirmed`);
-      }
-      
-      return true;
-    });
+    // connect() 方法会自动处理初始化握手
+    // 对于npx启动的服务器，可能需要更长时间，但connect()内部已经有超时处理
+    const connectionPromise = mcp.connect(transport);
 
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
