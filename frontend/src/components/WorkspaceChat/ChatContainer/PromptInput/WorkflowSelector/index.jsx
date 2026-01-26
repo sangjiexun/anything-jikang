@@ -268,10 +268,6 @@ export default function WorkflowSelector({ queryText = "", onSelect, onRun }) {
 
           <div 
             className="max-h-[250px] overflow-y-auto workflow-scrollbar"
-            style={{ 
-              scrollbarWidth: 'thin', 
-              scrollbarColor: '#6b7280 transparent',
-            }}
           >
             {loading ? (
               <div className="p-4 text-center text-theme-text-secondary text-sm">
