@@ -86,22 +86,18 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
 
         amapInstanceRef.current = map;
 
-        // 确保地图容器大小正确（延迟调用resize）
+        // 添加黑客风格HUD全息效果（蓝色和黄色基调）
         map.on("complete", () => {
-          // 延迟调用resize，确保地图完全加载
+          // 确保地图容器大小正确（延迟调用resize）
           setTimeout(() => {
             try {
               if (map && typeof map.resize === 'function') {
                 map.resize();
               }
             } catch (e) {
-              console.warn("地图resize失败:", e);
+              // 忽略resize错误，高德地图v1.4.15可能不需要手动resize
             }
-          }, 200);
-        });
-
-        // 添加黑客风格HUD全息效果（蓝色和黄色基调）
-        map.on("complete", () => {
+          }, 300);
           // 添加扫描线动画效果（使用CSS）
           const filterContainer = mapRef.current;
           if (filterContainer) {
@@ -174,16 +170,6 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
               
               if (validBounds.length > 0) {
                 map.setBounds(bounds);
-                // 延迟调用resize确保正确显示
-                setTimeout(() => {
-                  try {
-                    if (map && typeof map.resize === 'function') {
-                      map.resize();
-                    }
-                  } catch (e) {
-                    // 忽略resize错误
-                  }
-                }, 100);
               }
             } catch (error) {
               console.warn("调整地图视野失败:", error);
