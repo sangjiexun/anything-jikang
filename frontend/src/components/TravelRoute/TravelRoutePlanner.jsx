@@ -364,8 +364,8 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
       }
 
       // 加载高德地图JS API（如果未加载）
-      if (!window.AMap) {
-        await loadAmapScript(config.apiKey);
+      if (!window.AMap || !window.AMap.Driving) {
+        await loadAmapScriptForRoute(config.apiKey);
       }
 
       if (!window.AMap || !window.AMap.Driving) {

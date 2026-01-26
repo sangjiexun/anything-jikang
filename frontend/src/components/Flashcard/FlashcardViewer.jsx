@@ -391,17 +391,74 @@ export default function FlashcardViewer({ flashcards, onClose }) {
               display: !isFlipped ? "none" : "block",
             }}
           >
-            <div className="bg-theme-bg-secondary border border-theme-sidebar-border rounded-xl p-8 h-full flex flex-col">
-              <div className="flex-1">
-                <h3 className="text-xl font-semibold text-white mb-4">答案</h3>
-                <div className="text-white text-lg mb-6 min-h-[100px]">
-                  {currentCard.answer}
+            <div 
+              className="rounded-xl p-8 h-full flex flex-col relative overflow-hidden"
+              style={{
+                background: "linear-gradient(135deg, rgba(10, 10, 20, 0.95), rgba(20, 10, 30, 0.95))",
+                backdropFilter: "blur(10px)",
+                border: "2px solid",
+                borderImage: "linear-gradient(45deg, #ffff00, #00ffff) 1",
+                boxShadow: "0 0 20px rgba(255, 255, 0, 0.3), inset 0 0 10px rgba(255, 255, 0, 0.1)",
+              }}
+            >
+              {/* HUD网格背景 */}
+              <div 
+                className="absolute inset-0 opacity-20 pointer-events-none"
+                style={{
+                  backgroundImage: `
+                    linear-gradient(rgba(255, 255, 0, 0.1) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255, 255, 0, 0.1) 1px, transparent 1px)
+                  `,
+                  backgroundSize: "50px 50px",
+                }}
+              />
+              
+              <div className="flex-1 relative z-10">
+                <h3 
+                  className="text-xl font-semibold mb-4"
+                  style={{
+                    color: "#ffff00",
+                    textShadow: "0 0 10px rgba(255, 255, 0, 0.8)",
+                    fontFamily: "'Courier New', monospace",
+                  }}
+                >
+                  答案
+                </h3>
+                <div 
+                  className="text-lg mb-6 min-h-[100px]"
+                  style={{
+                    color: "#00ffff",
+                    textShadow: "0 0 10px rgba(0, 255, 255, 0.8)",
+                    fontFamily: "'Courier New', monospace",
+                    lineHeight: "1.8",
+                  }}
+                >
+                  {typeof currentCard.answer === "object"
+                    ? currentCard.answer.join(", ")
+                    : currentCard.answer}
                 </div>
 
                 {currentCard.explanation && (
                   <div className="mt-6">
-                    <h4 className="text-sm font-semibold text-white/80 mb-2">解释</h4>
-                    <div className="text-white/70 text-sm bg-theme-bg-primary rounded-lg p-4">
+                    <h4 
+                      className="text-sm font-semibold mb-2"
+                      style={{
+                        color: "#ffff00",
+                        fontFamily: "'Courier New', monospace",
+                      }}
+                    >
+                      解释
+                    </h4>
+                    <div 
+                      className="text-sm rounded-lg p-4"
+                      style={{
+                        color: "rgba(255, 255, 255, 0.9)",
+                        background: "rgba(10, 10, 20, 0.5)",
+                        border: "1px solid rgba(255, 255, 0, 0.3)",
+                        fontFamily: "'Courier New', monospace",
+                        lineHeight: "1.8",
+                      }}
+                    >
                       {currentCard.explanation}
                     </div>
                   </div>
@@ -409,10 +466,30 @@ export default function FlashcardViewer({ flashcards, onClose }) {
 
                 {currentCard.reference && (
                   <div className="mt-6">
-                    <h4 className="text-sm font-semibold text-white/80 mb-2">引用位置</h4>
-                    <div className="text-white/70 text-sm bg-theme-bg-primary rounded-lg p-4">
-                      <p className="font-medium">{currentCard.reference.document}</p>
-                      {currentCard.reference.page && (
+                    <h4 
+                      className="text-sm font-semibold mb-2"
+                      style={{
+                        color: "#ffff00",
+                        fontFamily: "'Courier New', monospace",
+                      }}
+                    >
+                      引用位置
+                    </h4>
+                    <div 
+                      className="text-sm rounded-lg p-4"
+                      style={{
+                        color: "rgba(255, 255, 255, 0.8)",
+                        background: "rgba(10, 10, 20, 0.5)",
+                        border: "1px solid rgba(255, 255, 0, 0.3)",
+                        fontFamily: "'Courier New', monospace",
+                      }}
+                    >
+                      {typeof currentCard.reference === "string" ? (
+                        <p>{currentCard.reference}</p>
+                      ) : (
+                        <>
+                          <p className="font-medium">{currentCard.reference.document}</p>
+                          {currentCard.reference.page && (
                         <p className="text-xs mt-1">页码: {currentCard.reference.page}</p>
                       )}
                       {currentCard.reference.section && (
