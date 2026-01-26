@@ -447,10 +447,14 @@ export default function WorkflowDesigner() {
     }
   };
 
+  // 日志计数器（用于生成唯一 ID）
+  const logIdRef = useRef(0);
+
   // 添加执行日志
   const addLog = (type, message, nodeId = null) => {
+    logIdRef.current += 1;
     const log = {
-      id: Date.now(),
+      id: `log_${Date.now()}_${logIdRef.current}`,
       type, // 'info' | 'success' | 'error' | 'warning'
       message,
       nodeId,
@@ -589,18 +593,20 @@ export default function WorkflowDesigner() {
     }
   };
 
-  // 获取节点的执行顺序（拓扑排序）
-  const getExecutionOrder = () => {
+  // 构建工作流执行图
+  const buildExecutionGraph = () => {
     const nodes = workflow.nodes || [];
     const connections = workflow.connections || [];
     
-    // 构建入度表和邻接表
+    // 构建入度表、邻接表和前驱表
     const inDegree = {};
-    const adjacency = {};
+    const adjacency = {}; // 后继节点
+    const predecessors = {}; // 前驱节点
     
     nodes.forEach((node) => {
       inDegree[node.id] = 0;
       adjacency[node.id] = [];
+      predecessors[node.id] = [];
     });
     
     connections.forEach((conn) => {
@@ -610,29 +616,33 @@ export default function WorkflowDesigner() {
       if (inDegree[conn.to] !== undefined) {
         inDegree[conn.to]++;
       }
+      if (predecessors[conn.to]) {
+        predecessors[conn.to].push(conn.from);
+      }
     });
     
     // 找到所有入度为0的节点（起始节点）
-    const queue = nodes.filter((node) => inDegree[node.id] === 0);
-    const order = [];
+    const startNodes = nodes.filter((node) => inDegree[node.id] === 0);
     
-    while (queue.length > 0) {
-      const node = queue.shift();
-      order.push(node);
-      
-      adjacency[node.id].forEach((nextId) => {
-        inDegree[nextId]--;
-        if (inDegree[nextId] === 0) {
-          const nextNode = nodes.find((n) => n.id === nextId);
-          if (nextNode) queue.push(nextNode);
-        }
-      });
-    }
-    
-    return order;
+    return { nodes, inDegree, adjacency, predecessors, startNodes };
   };
 
-  // 运行工作流
+  // 检查是否是条件分支节点
+  const isConditionalNode = (nodeType) => {
+    return nodeType === "condition" || nodeType === "loop";
+  };
+
+  // 检查是否是并行汇聚点（多个输入）
+  const isJoinNode = (nodeId, predecessors) => {
+    return predecessors[nodeId]?.length > 1;
+  };
+
+  // 检查是否是并行分支点（多个输出）
+  const isForkNode = (nodeId, adjacency) => {
+    return adjacency[nodeId]?.length > 1;
+  };
+
+  // 运行工作流（支持并行执行和条件分支）
   const runWorkflow = async () => {
     if ((workflow.nodes || []).length === 0) {
       showToast("请先添加节点", "warning");
@@ -645,33 +655,148 @@ export default function WorkflowDesigner() {
     setNodeResults({});
     setExecutionResult(null);
     setShowResultPanel(true);
+    logIdRef.current = 0;
 
     addLog("info", "🚀 工作流开始执行");
     const startTime = Date.now();
 
     try {
-      // 获取执行顺序
-      const executionOrder = getExecutionOrder();
-      addLog("info", `共 ${executionOrder.length} 个节点需要执行`);
+      const { nodes, inDegree, adjacency, predecessors, startNodes } = buildExecutionGraph();
+      
+      if (startNodes.length === 0) {
+        throw new Error("未找到起始节点（请确保有触发器或无输入的节点）");
+      }
 
-      let lastResult = null;
+      addLog("info", `共 ${nodes.length} 个节点，${startNodes.length} 个起始节点`);
+      
+      // 检测工作流模式
+      const hasFork = nodes.some((n) => isForkNode(n.id, adjacency));
+      const hasJoin = nodes.some((n) => isJoinNode(n.id, predecessors));
+      const hasCondition = nodes.some((n) => isConditionalNode(n.type));
+      
+      if (hasFork) addLog("info", "📊 检测到并行分支模式");
+      if (hasJoin) addLog("info", "🔀 检测到并行汇聚模式");
+      if (hasCondition) addLog("info", "🔀 检测到条件分支模式");
+
+      // 节点结果存储
       const allResults = {};
+      // 跟踪已完成的节点
+      const completed = new Set();
+      // 当前入度（动态更新）
+      const currentInDegree = { ...inDegree };
 
-      // 按顺序执行节点
-      for (const node of executionOrder) {
-        const result = await executeNode(node, lastResult);
-        lastResult = result;
+      // 执行单个节点并返回结果
+      const runNode = async (node) => {
+        // 收集所有前驱节点的输出作为输入
+        const inputs = predecessors[node.id].map((predId) => allResults[predId]);
+        // 如果只有一个输入，直接传递；否则传递数组
+        const inputData = inputs.length === 1 ? inputs[0] : inputs.length > 0 ? inputs : null;
+        
+        const result = await executeNode(node, inputData);
         allResults[node.id] = result;
+        completed.add(node.id);
+        
+        return { node, result };
+      };
+
+      // 处理条件节点的路由
+      const evaluateCondition = (node, result) => {
+        const nextNodes = adjacency[node.id];
+        if (nextNodes.length <= 1) return nextNodes;
+        
+        // 条件节点：根据结果选择分支
+        if (node.type === "condition") {
+          const passed = result?.passed ?? true;
+          // 假设第一个连接是 true 分支，第二个是 false 分支
+          if (passed) {
+            addLog("info", `条件判断: 通过 → 执行 true 分支`, node.id);
+            return [nextNodes[0]];
+          } else {
+            addLog("info", `条件判断: 不通过 → 执行 false 分支`, node.id);
+            return nextNodes.length > 1 ? [nextNodes[1]] : [];
+          }
+        }
+        
+        return nextNodes;
+      };
+
+      // BFS 执行，支持并行
+      let currentLevel = [...startNodes];
+      let levelCount = 1;
+
+      while (currentLevel.length > 0) {
+        const isParallel = currentLevel.length > 1;
+        
+        if (isParallel) {
+          addLog("info", `⚡ 第 ${levelCount} 层: 并行执行 ${currentLevel.length} 个节点`);
+          
+          // 并行执行当前层的所有节点
+          const results = await Promise.all(currentLevel.map(runNode));
+          
+          addLog("success", `✓ 第 ${levelCount} 层并行执行完成`);
+          
+          // 收集下一层节点
+          const nextLevel = new Set();
+          
+          for (const { node, result } of results) {
+            // 处理条件分支
+            const nextNodeIds = evaluateCondition(node, result);
+            
+            for (const nextId of nextNodeIds) {
+              currentInDegree[nextId]--;
+              
+              // 只有当所有前驱都完成时才加入下一层（汇聚点）
+              if (currentInDegree[nextId] === 0) {
+                const nextNode = nodes.find((n) => n.id === nextId);
+                if (nextNode && !completed.has(nextId)) {
+                  nextLevel.add(nextNode);
+                }
+              }
+            }
+          }
+          
+          currentLevel = Array.from(nextLevel);
+        } else {
+          // 单节点执行（链式）
+          const node = currentLevel[0];
+          const { result } = await runNode(node);
+          
+          // 处理条件分支
+          const nextNodeIds = evaluateCondition(node, result);
+          
+          // 更新下一层
+          currentLevel = [];
+          for (const nextId of nextNodeIds) {
+            currentInDegree[nextId]--;
+            
+            if (currentInDegree[nextId] === 0) {
+              const nextNode = nodes.find((n) => n.id === nextId);
+              if (nextNode && !completed.has(nextId)) {
+                currentLevel.push(nextNode);
+              }
+            }
+          }
+        }
+        
+        levelCount++;
       }
 
       const totalDuration = Date.now() - startTime;
+      
+      // 找到最终输出（没有后继的节点）
+      const endNodes = nodes.filter((n) => adjacency[n.id].length === 0);
+      const finalOutputs = endNodes.map((n) => allResults[n.id]).filter(Boolean);
+      const finalOutput = finalOutputs.length === 1 ? finalOutputs[0] : finalOutputs;
+
       addLog("success", `✅ 工作流执行完成 (总耗时: ${totalDuration}ms)`);
 
       setExecutionResult({
         success: true,
         duration: totalDuration,
-        nodeCount: executionOrder.length,
-        finalOutput: lastResult,
+        nodeCount: completed.size,
+        parallelExecution: hasFork,
+        conditionalBranch: hasCondition,
+        finalOutput,
         allResults,
       });
 
