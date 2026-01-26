@@ -107,14 +107,6 @@ export default function AmapViewer({
           resizeEnable: true,
         });
         
-        // 确保地图容器大小正确
-        map.on("complete", () => {
-          map.getSize();
-          setTimeout(() => {
-            map.resize();
-          }, 100);
-        });
-
         mapInstanceRef.current = map;
 
         // 地图加载完成后的处理
@@ -122,12 +114,17 @@ export default function AmapViewer({
           // 确保地图正确渲染
           setTimeout(() => {
             try {
-              map.getSize();
-              map.resize();
+              // 检查resize方法是否存在（高德地图v1.4.15可能没有此方法）
+              if (map && typeof map.resize === 'function') {
+                map.resize();
+              } else if (map && typeof map.getSize === 'function') {
+                // 如果resize不存在，至少调用getSize来触发地图更新
+                map.getSize();
+              }
             } catch (e) {
-              console.warn("地图resize失败:", e);
+              // 忽略resize错误，高德地图会自动处理容器大小变化
             }
-          }, 100);
+          }, 200);
         });
 
         // 绘制路线
