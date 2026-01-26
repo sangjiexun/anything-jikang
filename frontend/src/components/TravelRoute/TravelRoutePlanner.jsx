@@ -147,14 +147,25 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
           }
           
           if (validBounds.length > 0) {
-            const bounds = validBounds.reduce((bounds, coord) => {
-              return bounds.extend(coord);
-            }, new window.maplibregl.LngLatBounds(validBounds[0], validBounds[0]));
-            
-            map.fitBounds(bounds, {
-              padding: 50,
-              duration: 1000
-            });
+            try {
+              // 安全地创建bounds
+              const firstCoord = validBounds[0];
+              if (firstCoord && firstCoord.length === 2 && !isNaN(firstCoord[0]) && !isNaN(firstCoord[1])) {
+                const bounds = new window.maplibregl.LngLatBounds(firstCoord, firstCoord);
+                validBounds.forEach((coord) => {
+                  if (coord && coord.length === 2 && !isNaN(coord[0]) && !isNaN(coord[1])) {
+                    bounds.extend(coord);
+                  }
+                });
+                
+                map.fitBounds(bounds, {
+                  padding: 50,
+                  duration: 1000
+                });
+              }
+            } catch (error) {
+              console.warn("调整地图视野失败:", error);
+            }
           }
         });
       })
@@ -673,13 +684,56 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
     generateTravelRoute(query);
   }, [query]);
 
-  // 从消息中提取坐标
-  const extractCoordinatesFromMessage = (messageText) => {
+  // 从消息中提取坐标（优先使用高德MCP搜索地址获取坐标）
+  const extractCoordinatesFromMessage = async (messageText) => {
     if (!messageText) return [];
 
     const coordinates = [];
     
-    // 匹配坐标格式：经度,纬度 或 纬度,经度
+    // 首先尝试从文本中提取地址，使用高德MCP搜索获取坐标
+    const addressPatterns = [
+      /(?:地址|位置|地点|去|到|在)[:：]?\s*([^，,。.\n坐标]+?)(?:\s|$|，|。|坐标)/g,
+      /([^，,。.\n]+?)(?:的坐标|在哪里|位置|地址)/g,
+    ];
+
+    const addresses = [];
+    addressPatterns.forEach((pattern) => {
+      let match;
+      while ((match = pattern.exec(messageText)) !== null) {
+        const addr = match[1]?.trim();
+        if (addr && addr.length > 1 && addr.length < 50 && !addr.match(/^\d+\.?\d*$/)) {
+          addresses.push(addr);
+        }
+      }
+    });
+
+    // 使用高德MCP搜索地址获取坐标
+    if (addresses.length > 0) {
+      const config = getAmapMCPConfig();
+      if (config && config.apiKey) {
+        for (const address of addresses) {
+          try {
+            const geoResult = await callAmapTool("maps_geo", {
+              address: address,
+            });
+
+            if (geoResult && geoResult.success && geoResult.data) {
+              const location = geoResult.data.location;
+              if (location) {
+                const [lng, lat] = location.split(",").map(Number);
+                if (!isNaN(lng) && !isNaN(lat) && isValidCoordinate([lng, lat])) {
+                  coordinates.push([lng, lat]);
+                }
+              }
+            }
+          } catch (error) {
+            console.warn(`通过高德MCP搜索地址"${address}"失败:`, error);
+          }
+        }
+      }
+    }
+
+    // 然后匹配直接提供的坐标格式：经度,纬度 或 纬度,经度
     const coordPatterns = [
       // 标准格式：116.397428,39.90923 或 39.90923,116.397428
       /([-+]?\d+\.?\d*)[,，\s]+([-+]?\d+\.?\d*)/g,
@@ -705,26 +759,14 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
           lat = parseFloat(match[2]);
         }
 
-        // 验证坐标范围（中国地区大致范围）
-        if (
-          !isNaN(lng) &&
-          !isNaN(lat) &&
-          lng >= 73 && lng <= 135 && // 中国经度范围
-          lat >= 18 && lat <= 54    // 中国纬度范围
-        ) {
-          coordinates.push([lng, lat]);
-        } else if (
-          !isNaN(lng) &&
-          !isNaN(lat) &&
-          lng >= -180 && lng <= 180 &&
-          lat >= -90 && lat <= 90
-        ) {
-          // 全球范围坐标也接受
+        // 验证坐标范围
+        if (isValidCoordinate([lng, lat])) {
           coordinates.push([lng, lat]);
         }
       }
     });
 
+    // 去重
     return [...new Set(coordinates.map(c => c.join(',')))].map(c => c.split(',').map(Number));
   };
 
@@ -732,8 +774,8 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
   const parseAttractionsFromMessage = async (messageText) => {
     if (!messageText) return;
 
-    // 首先提取坐标
-    const extractedCoords = extractCoordinatesFromMessage(messageText);
+    // 首先提取坐标（使用高德MCP搜索）
+    const extractedCoords = await extractCoordinatesFromMessage(messageText);
     if (extractedCoords.length > 0) {
       // 如果有坐标，直接使用坐标创建关键位置点
       for (let i = 0; i < extractedCoords.length; i++) {
