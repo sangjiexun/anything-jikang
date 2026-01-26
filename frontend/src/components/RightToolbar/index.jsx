@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
   GitBranch,
@@ -112,6 +113,7 @@ const SIDEBAR_ICONS = [
 ];
 
 export default function RightToolbar() {
+  const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedTool, setSelectedTool] = useState(null);
   const [writingContent, setWritingContent] = useState("");
@@ -143,6 +145,11 @@ export default function RightToolbar() {
     // 知识库管理 - 打开文档管理窗口
     if (toolId === "knowledge-base") {
       showManageWorkspace();
+    }
+    // 工作流 - 跳转到工作流设计器页面
+    if (toolId === "workflow") {
+      navigate("/workflow");
+      return;
     }
     // 智能图文工作台 / 视频工作台 - 需要更宽的面板
     if (toolId === "image-text-studio" || toolId === "video-studio") {

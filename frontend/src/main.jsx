@@ -68,6 +68,15 @@ const router = createBrowserRouter([
           return { element: <InvitePage /> };
         },
       },
+      {
+        path: "/workflow",
+        lazy: async () => {
+          const { default: WorkflowDesigner } = await import(
+            "@/pages/WorkflowDesigner"
+          );
+          return { element: <PrivateRoute Component={WorkflowDesigner} /> };
+        },
+      },
       // Admin routes
       {
         path: "/settings/llm-preference",
