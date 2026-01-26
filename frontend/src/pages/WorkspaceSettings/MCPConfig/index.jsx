@@ -256,8 +256,17 @@ export default function MCPConfig({ workspace }) {
     // 如果没有参数但有命令，确保args是数组
     if (!backendConfig.args || backendConfig.args.length === 0) {
       // 对于高德地图，如果没有参数，添加默认参数
-      if (serverConfig.name && serverConfig.name.includes("高德") || serverConfig.name.includes("amap")) {
+      if (serverConfig.name && (serverConfig.name.includes("高德") || serverConfig.name.includes("amap") || serverConfig.name.includes("高德map"))) {
         backendConfig.args = ["-y", "@amap/amap-maps-mcp-server"];
+      }
+    }
+    
+    // 确保args是数组格式
+    if (!Array.isArray(backendConfig.args)) {
+      if (typeof backendConfig.args === "string" && backendConfig.args.trim()) {
+        backendConfig.args = backendConfig.args.trim().split(/\s+/);
+      } else {
+        backendConfig.args = [];
       }
     }
 

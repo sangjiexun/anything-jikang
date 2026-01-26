@@ -361,8 +361,15 @@ class MCPHypervisor {
       if (
         Object.prototype.hasOwnProperty.call(server, "args") &&
         !Array.isArray(server.args)
-      )
-        throw new Error("MCP server args must be an array");
+      ) {
+        // 尝试将字符串转换为数组
+        if (typeof server.args === "string") {
+          server.args = server.args.trim().split(/\s+/).filter(arg => arg.length > 0);
+          this.log(`Converted args string to array for ${name}:`, server.args);
+        } else {
+          throw new Error("MCP server args must be an array or string");
+        }
+      }
     }
 
     if (type === "http") {
