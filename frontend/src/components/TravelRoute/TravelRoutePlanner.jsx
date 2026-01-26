@@ -191,68 +191,100 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
             animationFrameRef.current = null;
           }
 
-          // 清理标记
+          // 清理标记（延迟清理，避免与React的清理冲突）
           if (markersRef.current && markersRef.current.length > 0) {
-            markersRef.current.forEach((marker) => {
+            const markers = [...markersRef.current]; // 创建副本
+            markersRef.current = []; // 先清空引用
+            
+            // 使用 setTimeout 延迟清理
+            setTimeout(() => {
+              markers.forEach((marker) => {
+                try {
+                  if (marker) {
+                    // 先尝试 setMap(null)，这是更安全的清理方式
+                    if (typeof marker.setMap === 'function') {
+                      marker.setMap(null);
+                    }
+                    // 如果标记有 remove 方法，也调用它
+                    if (typeof marker.remove === 'function') {
+                      marker.remove();
+                    }
+                  }
+                } catch (e) {
+                  // 忽略单个标记清理错误
+                }
+              });
+            }, 0);
+          }
+
+          // 清理路线（延迟清理，避免与React的清理冲突）
+          if (routeLineRef.current) {
+            const routeLine = routeLineRef.current;
+            routeLineRef.current = null; // 先清空引用
+            
+            setTimeout(() => {
               try {
-                if (marker) {
-                  // 先尝试 setMap(null)，这是更安全的清理方式
-                  if (typeof marker.setMap === 'function') {
-                    marker.setMap(null);
-                  }
-                  // 如果标记有 remove 方法，也调用它
-                  if (typeof marker.remove === 'function') {
-                    marker.remove();
-                  }
+                if (routeLine && typeof routeLine.setMap === 'function') {
+                  routeLine.setMap(null);
                 }
               } catch (e) {
-                // 忽略单个标记清理错误
+                // 忽略清理错误
               }
-            });
-            markersRef.current = [];
+            }, 0);
           }
 
-          // 清理路线
-          if (routeLineRef.current) {
-            try {
-              routeLineRef.current.setMap(null);
-            } catch (e) {
-              // 忽略清理错误
-            }
-            routeLineRef.current = null;
-          }
-
-          // 清理起点和终点标记
+          // 清理起点和终点标记（延迟清理）
           if (startMarkerRef.current) {
-            try {
-              startMarkerRef.current.setMap(null);
-            } catch (e) {
-              // 忽略清理错误
-            }
-            startMarkerRef.current = null;
+            const startMarker = startMarkerRef.current;
+            startMarkerRef.current = null; // 先清空引用
+            
+            setTimeout(() => {
+              try {
+                if (startMarker && typeof startMarker.setMap === 'function') {
+                  startMarker.setMap(null);
+                }
+              } catch (e) {
+                // 忽略清理错误
+              }
+            }, 0);
           }
 
           if (endMarkerRef.current) {
-            try {
-              endMarkerRef.current.setMap(null);
-            } catch (e) {
-              // 忽略清理错误
-            }
-            endMarkerRef.current = null;
+            const endMarker = endMarkerRef.current;
+            endMarkerRef.current = null; // 先清空引用
+            
+            setTimeout(() => {
+              try {
+                if (endMarker && typeof endMarker.setMap === 'function') {
+                  endMarker.setMap(null);
+                }
+              } catch (e) {
+                // 忽略清理错误
+              }
+            }, 0);
           }
 
-          // 清理扫描线元素
+          // 清理扫描线元素（延迟清理，避免与React的清理冲突）
           if (scanlineRef.current) {
-            try {
-              const scanline = scanlineRef.current;
-              // 检查元素是否仍然在DOM中且是父节点的子节点
-              if (scanline && scanline.parentNode && scanline.parentNode.contains(scanline)) {
-                scanline.parentNode.removeChild(scanline);
+            const scanline = scanlineRef.current;
+            scanlineRef.current = null; // 先清空引用，避免重复清理
+            
+            // 使用 setTimeout 延迟清理，让 React 先完成清理
+            setTimeout(() => {
+              try {
+                if (scanline && scanline.parentNode) {
+                  // 优先使用 remove() 方法（更安全）
+                  if (typeof scanline.remove === 'function') {
+                    scanline.remove();
+                  } else if (scanline.parentNode.contains(scanline)) {
+                    // 降级使用 removeChild
+                    scanline.parentNode.removeChild(scanline);
+                  }
+                }
+              } catch (e) {
+                // 忽略清理错误，可能已经被React或其他代码移除
               }
-            } catch (e) {
-              // 忽略清理错误，可能已经被React移除
-            }
-            scanlineRef.current = null;
+            }, 0);
           }
 
           // 清理悬停信息窗口
