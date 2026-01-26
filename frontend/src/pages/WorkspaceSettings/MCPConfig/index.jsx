@@ -85,6 +85,8 @@ export default function MCPConfig({ workspace }) {
             config: {
               apiKey: "671a340b83a6c56c1ac80779984ab086",
               webApiKey: "671a340b83a6c56c1ac80779984ab086",
+              command: "npx",
+              args: "-y @amap/amap-maps-mcp-server",
             },
           },
           {

@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { chatQueryRefusalResponse } from "@/utils/chat";
 import AmapViewer from "@/components/AmapViewer";
+import AmapResult from "@/components/AmapResult";
 
 const HistoricalMessage = ({
   uuid = v4(),
@@ -214,12 +215,25 @@ function ChatAttachments({ attachments = [] }) {
 
 const RenderChatContent = memo(
   ({ role, message, expanded = false }) => {
-    // 检测是否需要显示地图
+    // 检测是否需要显示地图或调用地图工具
     const shouldShowMap = useMemo(() => {
       if (role !== "assistant" || !message) return false;
       const lowerMessage = message.toLowerCase();
       const mapKeywords = ["地图", "位置", "高德", "amap", "定位", "坐标", "地点", "位置服务"];
       return mapKeywords.some((keyword) => lowerMessage.includes(keyword));
+    }, [role, message]);
+
+    // 检测是否需要调用地图工具
+    const shouldCallAmapTool = useMemo(() => {
+      if (role !== "assistant" || !message) return false;
+      const lowerMessage = message.toLowerCase();
+      const toolKeywords = [
+        "逆地理编码", "坐标转地址", "地址转坐标", "地理编码",
+        "天气", "搜索", "查找", "周边", "附近",
+        "路线", "导航", "步行", "驾车", "骑行", "公交",
+        "距离", "ip定位"
+      ];
+      return toolKeywords.some((keyword) => lowerMessage.includes(keyword));
     }, [role, message]);
 
     // 获取高德地图 API Key
@@ -288,7 +302,12 @@ const RenderChatContent = memo(
             __html: DOMPurify.sanitize(renderMarkdown(msgToRender)),
           }}
         />
-        {shouldShowMap && amapApiKey && (
+        {shouldCallAmapTool && (
+          <div className="mt-4">
+            <AmapResult query={msgToRender} />
+          </div>
+        )}
+        {shouldShowMap && !shouldCallAmapTool && amapApiKey && (
           <div className="mt-4">
             <AmapViewer apiKey={amapApiKey} height="400px" />
           </div>
