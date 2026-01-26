@@ -142,19 +142,30 @@ class MCPHypervisor {
       { mcpServers: {} }
     );
 
+    // 确保args是数组格式
+    const normalizedConfig = { ...serverConfig };
+    if (normalizedConfig.args && !Array.isArray(normalizedConfig.args)) {
+      if (typeof normalizedConfig.args === "string" && normalizedConfig.args.trim()) {
+        normalizedConfig.args = normalizedConfig.args.trim().split(/\s+/);
+        this.log(`Converted args string to array for ${name}:`, normalizedConfig.args);
+      } else {
+        normalizedConfig.args = [];
+      }
+    }
+
     // Merge with existing config if it exists
     if (servers.mcpServers[name]) {
       servers.mcpServers[name] = {
         ...servers.mcpServers[name],
-        ...serverConfig,
+        ...normalizedConfig,
         // Preserve env variables and merge them
         env: {
           ...(servers.mcpServers[name].env || {}),
-          ...(serverConfig.env || {}),
+          ...(normalizedConfig.env || {}),
         },
       };
     } else {
-      servers.mcpServers[name] = serverConfig;
+      servers.mcpServers[name] = normalizedConfig;
     }
 
     fs.writeFileSync(
@@ -449,21 +460,46 @@ class MCPHypervisor {
 
     // Connect and await the connection with a timeout
     this.mcps[name] = mcp;
-    const connectionPromise = mcp.connect(transport);
+    
+    // 增加超时时间到60秒，因为某些MCP服务器（如npx启动的）需要更多时间
+    const connectionTimeout = 60_000; // 60 second timeout
+    
+    const connectionPromise = mcp.connect(transport).then(async () => {
+      // 连接成功后，等待一下确保初始化完成
+      // 某些MCP服务器需要额外时间来完成初始化
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return true;
+    });
 
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(
-        () => reject(new Error("Connection timeout")),
-        30_000
-      ); // 30 second timeout
+        () => reject(new Error(`Connection timeout after ${connectionTimeout / 1000} seconds`)),
+        connectionTimeout
+      );
     });
 
     try {
       await Promise.race([connectionPromise, timeoutPromise]);
       if (timeoutId) clearTimeout(timeoutId);
+      
+      // 验证连接是否真的建立
+      // 注意：某些MCP服务器可能不会立即响应ping，所以这里不强制ping
+      this.log(`MCP server ${name} connected successfully`);
     } catch (error) {
       if (timeoutId) clearTimeout(timeoutId);
+      
+      // 清理失败的连接
+      if (this.mcps[name]) {
+        try {
+          this.mcps[name].close();
+        } catch (e) {
+          // 忽略关闭错误
+        }
+        delete this.mcps[name];
+      }
+      
+      this.log(`MCP server ${name} connection failed:`, error.message);
       throw error;
     }
     return true;
