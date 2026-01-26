@@ -98,32 +98,15 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
               // 忽略resize错误，高德地图v1.4.15可能不需要手动resize
             }
           }, 300);
+          
           // 添加扫描线动画效果（使用CSS）
           const filterContainer = mapRef.current;
           if (filterContainer) {
             filterContainer.style.filter = "contrast(1.2) brightness(0.9)";
             filterContainer.style.position = "relative";
-            
-            // 创建扫描线效果
-            const scanline = document.createElement("div");
-            scanline.className = "hud-scanline";
-            scanline.style.cssText = `
-              position: absolute;
-              top: 0;
-              left: 0;
-              right: 0;
-              height: 2px;
-              background: linear-gradient(to bottom, 
-                transparent 0%, 
-                rgba(0, 255, 255, 0.5) 50%, 
-                transparent 100%);
-              animation: scanline 3s linear infinite;
-              pointer-events: none;
-              z-index: 1000;
-            `;
-            filterContainer.appendChild(scanline);
-            scanlineRef.current = scanline;
           }
+          
+          setMapLoaded(true);
 
           setMapLoaded(true);
           mapInstanceRef.current = map;
@@ -264,28 +247,8 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
             }, 0);
           }
 
-          // 清理扫描线元素（延迟清理，避免与React的清理冲突）
-          if (scanlineRef.current) {
-            const scanline = scanlineRef.current;
-            scanlineRef.current = null; // 先清空引用，避免重复清理
-            
-            // 使用 setTimeout 延迟清理，让 React 先完成清理
-            setTimeout(() => {
-              try {
-                if (scanline && scanline.parentNode) {
-                  // 优先使用 remove() 方法（更安全）
-                  if (typeof scanline.remove === 'function') {
-                    scanline.remove();
-                  } else if (scanline.parentNode.contains(scanline)) {
-                    // 降级使用 removeChild
-                    scanline.parentNode.removeChild(scanline);
-                  }
-                }
-              } catch (e) {
-                // 忽略清理错误，可能已经被React或其他代码移除
-              }
-            }, 0);
-          }
+          // 扫描线元素现在由React管理，不需要手动清理
+          scanlineRef.current = null;
 
           // 清理悬停信息窗口
           if (hoverInfoRef.current) {
@@ -749,6 +712,24 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
       
       {/* HUD边框效果 */}
       <div className="hud-border" />
+      
+      {/* 扫描线效果 - 由React管理，避免DOM操作冲突 */}
+      {mapLoaded && (
+        <div
+          className="hud-scanline"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "2px",
+            background: "linear-gradient(to bottom, transparent 0%, rgba(0, 255, 255, 0.5) 50%, transparent 100%)",
+            animation: "scanline 3s linear infinite",
+            pointerEvents: "none",
+            zIndex: 1000,
+          }}
+        />
+      )}
       
       {!mapLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-10">
