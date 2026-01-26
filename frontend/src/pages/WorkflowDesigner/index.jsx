@@ -409,38 +409,81 @@ export default function WorkflowDesigner() {
     addNode(nodeType, x, y);
   };
 
-  // 保存工作流到服务器
+  // 保存工作流（本地 + 服务器）
   const saveWorkflow = async () => {
     try {
-      // 保存到 localStorage
-      localStorage.setItem("workflow_draft", JSON.stringify(workflow));
-
-      // 保存到服务器
-      const config = {
-        nodes: workflow.nodes,
-        connections: workflow.connections || [],
-        blocks: (workflow.nodes || []).map((node) => ({
-          id: node.id,
-          type: node.type,
-          position: { x: node.x, y: node.y },
-          config: node.config,
-        })),
+      // 确保有 UUID
+      const workflowToSave = {
+        ...workflow,
+        uuid: workflow.uuid || `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        updatedAt: new Date().toISOString(),
       };
 
-      const result = await Workflow.save(
-        workflow.name,
-        config,
-        workflow.uuid || null
-      );
+      // 保存当前编辑的工作流到 localStorage
+      localStorage.setItem("workflow_draft", JSON.stringify(workflowToSave));
 
-      if (result.success) {
-        // 更新 UUID
-        if (result.flow?.uuid) {
-          setWorkflow((prev) => ({ ...prev, uuid: result.flow.uuid }));
+      // 获取本地工作流列表
+      let localWorkflows = [];
+      try {
+        const saved = localStorage.getItem("workflow_list");
+        if (saved) {
+          localWorkflows = JSON.parse(saved);
         }
-        showToast("工作流已保存到服务器", "success");
+      } catch (e) {
+        console.error("Error loading local workflows:", e);
+      }
+
+      // 更新或添加工作流到列表
+      const existingIndex = localWorkflows.findIndex((w) => w.uuid === workflowToSave.uuid);
+      const workflowSummary = {
+        uuid: workflowToSave.uuid,
+        name: workflowToSave.name,
+        nodeCount: (workflowToSave.nodes || []).length,
+        active: true,
+        updatedAt: workflowToSave.updatedAt,
+      };
+
+      if (existingIndex >= 0) {
+        localWorkflows[existingIndex] = workflowSummary;
       } else {
-        showToast("保存到服务器失败: " + (result.error || "未知错误"), "warning");
+        localWorkflows.push(workflowSummary);
+      }
+
+      // 保存工作流列表
+      localStorage.setItem("workflow_list", JSON.stringify(localWorkflows));
+
+      // 保存完整工作流数据
+      localStorage.setItem(`workflow_${workflowToSave.uuid}`, JSON.stringify(workflowToSave));
+
+      // 更新状态
+      setWorkflow(workflowToSave);
+
+      showToast("工作流已保存", "success");
+
+      // 尝试保存到服务器（可选，不阻塞）
+      try {
+        const config = {
+          nodes: workflowToSave.nodes,
+          connections: workflowToSave.connections || [],
+          blocks: (workflowToSave.nodes || []).map((node) => ({
+            id: node.id,
+            type: node.type,
+            position: { x: node.x, y: node.y },
+            config: node.config,
+          })),
+        };
+
+        const result = await Workflow.save(
+          workflowToSave.name,
+          config,
+          workflowToSave.uuid
+        );
+
+        if (result.success) {
+          console.log("工作流已同步到服务器");
+        }
+      } catch (serverError) {
+        console.warn("服务器同步失败，已保存到本地:", serverError.message);
       }
     } catch (error) {
       showToast("保存失败: " + error.message, "error");
