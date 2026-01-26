@@ -20,6 +20,7 @@ const Actions = ({
   metrics = {},
   alignmentCls = "",
   sendCommand,
+  workspace,
 }) => {
   const { t } = useTranslation();
   const [selectedFeedback, setSelectedFeedback] = useState(feedbackScore);
@@ -62,7 +63,8 @@ const Actions = ({
             isEditing={isEditing}
             role={role}
             message={message}
-            onReask={(content) => sendCommand && sendCommand({ text: content, autoSubmit: false })}
+            workspace={workspace || { slug }}
+            onReask={(content, autoSubmit = true) => sendCommand && sendCommand({ text: content, autoSubmit })}
           />
         </div>
       </div>

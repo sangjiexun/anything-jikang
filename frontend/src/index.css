@@ -1336,6 +1336,23 @@ does not extend the close button beyond the viewport. */
   background-color: rgba(156, 163, 175, 1);
 }
 
+/* Flashcard 3D flip animation */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
 /* Recharts rendering styles */
 .recharts-text > * {
   fill: #fff;

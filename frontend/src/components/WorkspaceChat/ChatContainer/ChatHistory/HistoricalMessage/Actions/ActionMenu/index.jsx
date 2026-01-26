@@ -1,9 +1,11 @@
-import React from "react";
-import { Trash, TreeView, ArrowClockwise, PencilLine, Lightning } from "@phosphor-icons/react";
+import React, { useState, useEffect } from "react";
+import { Trash, TreeView, ArrowClockwise, PencilLine, Lightning, X } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
+import showToast from "@/utils/toast";
 
-function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
+function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask, workspace }) {
   const { t } = useTranslation();
+  const [showFlashcardModal, setShowFlashcardModal] = useState(false);
 
   const handleFork = () => {
     forkThread(chatId);
@@ -15,10 +17,11 @@ function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
     );
   };
 
-  // 重新提问 - 将当前消息内容发送到输入框
+  // 重新提问 - 将当前消息内容发送到输入框并自动提交
   const handleReask = () => {
     if (onReask && message) {
-      onReask(message);
+      // 确保自动提交
+      onReask(message, true);
     }
   };
 
@@ -38,8 +41,13 @@ function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
   const handleEnhance = () => {
     if (onReask && message) {
       // 使用 @agent 命令触发 agent 模式，并带上原始消息
-      onReask(`@agent ${message}`);
+      onReask(`@agent ${message}`, true);
     }
+  };
+
+  // 创建问答闪卡
+  const handleCreateFlashcard = () => {
+    setShowFlashcardModal(true);
   };
 
   if (!chatId || isEditing || role === "user") return null;
@@ -80,14 +88,14 @@ function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
         </button>
       </div>
 
-      {/* 加强按钮 - 使用 Agent Skills */}
+      {/* 创建问答闪卡按钮 */}
       <div className="mt-3 relative">
         <button
-          onClick={handleEnhance}
+          onClick={handleCreateFlashcard}
           className="border-none text-zinc-300"
-          data-tooltip-id="enhance-message"
-          data-tooltip-content={t("chat_window.enhance_tooltip")}
-          aria-label={t("chat_window.enhance")}
+          data-tooltip-id="flashcard-message"
+          data-tooltip-content={t("chat_window.create_flashcard")}
+          aria-label={t("chat_window.create_flashcard")}
         >
           <Lightning
             color="var(--theme-sidebar-footer-icon-fill)"
@@ -130,6 +138,411 @@ function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
             className="mb-1"
           />
         </button>
+      </div>
+
+      {/* 闪卡创建弹窗 */}
+      {showFlashcardModal && (
+        <FlashcardCreateModal
+          workspace={workspace}
+          message={message}
+          onClose={() => setShowFlashcardModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// 闪卡创建弹窗组件
+function FlashcardCreateModal({ workspace, message, onClose }) {
+  const { t } = useTranslation();
+  const [questionCount, setQuestionCount] = useState(10);
+  const [difficulty, setDifficulty] = useState("medium");
+  const [knowledgeBases, setKnowledgeBases] = useState([]);
+  const [selectedDocs, setSelectedDocs] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingKBs, setLoadingKBs] = useState(true);
+
+  useEffect(() => {
+    loadKnowledgeBases();
+  }, []);
+
+  const loadKnowledgeBases = async () => {
+    setLoadingKBs(true);
+    try {
+      const { API_BASE } = await import("@/utils/constants");
+      const { baseHeaders } = await import("@/utils/request");
+      const response = await fetch(`${API_BASE}/knowledge-bases?mine=true`, {
+        headers: baseHeaders(),
+      });
+      const result = await response.json();
+      if (result.success && result.data) {
+        setKnowledgeBases(result.data);
+        // 加载每个知识库的文档
+        for (const kb of result.data) {
+          await loadDocuments(kb.id);
+        }
+      }
+    } catch (error) {
+      console.error("加载知识库失败:", error);
+    } finally {
+      setLoadingKBs(false);
+    }
+  };
+
+  const loadDocuments = async (kbId) => {
+    try {
+      const { API_BASE } = await import("@/utils/constants");
+      const { baseHeaders } = await import("@/utils/request");
+      const response = await fetch(`${API_BASE}/knowledge-bases/${kbId}/documents`, {
+        headers: baseHeaders(),
+      });
+      const result = await response.json();
+      if (result.success && result.data) {
+        setKnowledgeBases((prev) =>
+          prev.map((kb) =>
+            kb.id === kbId
+              ? { ...kb, documents: result.data.documents || [] }
+              : kb
+          )
+        );
+      }
+    } catch (error) {
+      console.error(`加载知识库 ${kbId} 文档失败:`, error);
+    }
+  };
+
+  const toggleDocument = (kbId, docId) => {
+    setSelectedDocs((prev) => {
+      const key = `${kbId}-${docId}`;
+      if (prev.includes(key)) {
+        return prev.filter((k) => k !== key);
+      } else {
+        return [...prev, key];
+      }
+    });
+  };
+
+  const handleCreate = async () => {
+    if (selectedDocs.length === 0) {
+      showToast("请至少选择一个知识库文档", "warning");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 获取选中的文档信息
+      const selectedDocuments = [];
+      knowledgeBases.forEach((kb) => {
+        kb.documents?.forEach((doc) => {
+          if (selectedDocs.includes(`${kb.id}-${doc.id}`)) {
+            selectedDocuments.push({
+              ...doc,
+              knowledgeBaseId: kb.id,
+              knowledgeBaseName: kb.name,
+            });
+          }
+        });
+      });
+
+      // 从知识库检索内容
+      showToast("正在从知识库检索内容...", "info");
+      const { API_BASE } = await import("@/utils/constants");
+      const { baseHeaders } = await import("@/utils/request");
+
+      // 检索所有选中文档的内容
+      let allContent = "";
+      const references = [];
+      
+      for (const doc of selectedDocuments) {
+        try {
+          // 使用向量搜索获取相关内容
+          const searchResponse = await fetch(
+            `${API_BASE}/vector-search/knowledge-bases/${doc.knowledgeBaseId}/search`,
+            {
+              method: "POST",
+              headers: baseHeaders(),
+              body: JSON.stringify({
+                query: doc.file_name || doc.title || "",
+                topK: 5,
+                threshold: 0.3,
+                includeMetadata: true,
+              }),
+            }
+          );
+
+          if (searchResponse.ok) {
+            const searchResult = await searchResponse.json();
+            const results = searchResult.data?.results || searchResult.results || [];
+            
+            if (results.length > 0) {
+              const content = results.map((r) => r.content || r.preview || "").join("\n\n");
+              allContent += `\n\n--- 文档: ${doc.file_name || doc.title} ---\n${content}`;
+              
+              references.push({
+                document: doc.file_name || doc.title,
+                knowledgeBase: doc.knowledgeBaseName,
+                chunks: results.map((r) => ({
+                  content: r.content || r.preview || "",
+                  score: r.score || r.similarity || 0,
+                })),
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`检索文档 ${doc.id} 失败:`, error);
+        }
+      }
+
+      if (!allContent.trim()) {
+        showToast("未能从知识库检索到内容", "warning");
+        return;
+      }
+
+      // 调用LLM生成题目
+      showToast("正在生成题目...", "info");
+      
+      // 获取LLM配置
+      let llmConfig = {
+        endpoint: "https://api.deepseek.com",
+        apiKey: "",
+        model: "deepseek-chat",
+      };
+      
+      try {
+        const savedConfig = localStorage.getItem("workflow_llm_config");
+        if (savedConfig) {
+          llmConfig = { ...llmConfig, ...JSON.parse(savedConfig) };
+        }
+      } catch (e) {
+        console.error("加载LLM配置失败:", e);
+      }
+
+      if (!llmConfig.apiKey) {
+        showToast("请先配置LLM API Key", "warning");
+        return;
+      }
+
+      const difficultyMap = {
+        easy: "简单（基础概念和定义）",
+        medium: "中等（需要理解和应用）",
+        hard: "困难（需要分析和综合）",
+      };
+
+      const prompt = `基于以下知识库内容，生成 ${questionCount} 道${difficultyMap[difficulty]}难度的问答题目。
+
+要求：
+1. 每道题目包含：问题、答案、解释、引用位置
+2. 题目应该覆盖知识库的核心内容
+3. 难度级别：${difficultyMap[difficulty]}
+4. 返回JSON格式，格式如下：
+{
+  "flashcards": [
+    {
+      "question": "问题内容",
+      "answer": "答案内容",
+      "explanation": "详细解释",
+      "reference": {
+        "document": "文档名称",
+        "excerpt": "引用片段（可选）",
+        "page": "页码（如果有）",
+        "section": "章节（如果有）"
+      }
+    }
+  ]
+}
+
+知识库内容：
+${allContent.substring(0, 8000)}`;
+
+      const llmResponse = await fetch(`${llmConfig.endpoint}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${llmConfig.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: llmConfig.model,
+          messages: [
+            {
+              role: "system",
+              content: "你是一个专业的题目生成助手，能够根据知识库内容生成高质量的问答题目。请严格按照JSON格式返回结果。",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.7,
+          max_tokens: 4000,
+        }),
+      });
+
+      if (!llmResponse.ok) {
+        throw new Error(`LLM API请求失败: ${llmResponse.status}`);
+      }
+
+      const llmResult = await llmResponse.json();
+      const responseText = llmResult.choices?.[0]?.message?.content || "";
+
+      // 解析JSON响应
+      let flashcards = [];
+      try {
+        // 尝试提取JSON部分
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          flashcards = parsed.flashcards || [];
+        } else {
+          throw new Error("无法解析JSON响应");
+        }
+      } catch (parseError) {
+        console.error("解析题目失败:", parseError);
+        // 如果解析失败，尝试手动生成示例题目
+        flashcards = [
+          {
+            question: "请根据知识库内容回答这个问题",
+            answer: "答案需要从知识库中提取",
+            explanation: "这是基于知识库内容生成的题目",
+            reference: {
+              document: selectedDocuments[0]?.file_name || "未知文档",
+            },
+          },
+        ];
+      }
+
+      if (flashcards.length === 0) {
+        showToast("未能生成题目，请重试", "warning");
+        return;
+      }
+
+      // 保存闪卡数据
+      const flashcardData = {
+        flashcards,
+        config: {
+          questionCount,
+          difficulty,
+          selectedDocs,
+        },
+        references,
+      };
+
+      localStorage.setItem("flashcard_data", JSON.stringify(flashcardData));
+
+      // 触发闪卡显示事件
+      window.dispatchEvent(
+        new CustomEvent("show-flashcards", { detail: flashcardData })
+      );
+
+      onClose();
+      showToast(`成功生成 ${flashcards.length} 道题目`, "success");
+    } catch (error) {
+      console.error("创建闪卡失败:", error);
+      showToast("创建闪卡失败: " + error.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-theme-bg-secondary border border-theme-sidebar-border rounded-xl w-[600px] max-w-[90vw] shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b border-theme-sidebar-border sticky top-0 bg-theme-bg-secondary z-10">
+          <h2 className="text-lg font-semibold text-white">创建问答闪卡</h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-white/10 rounded transition-colors"
+          >
+            <X className="w-5 h-5 text-white/60" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* 题目数量 */}
+          <div>
+            <label className="block text-sm text-white/60 mb-2">题目数量</label>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={questionCount}
+              onChange={(e) => setQuestionCount(parseInt(e.target.value) || 10)}
+              className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {/* 难度选择 */}
+          <div>
+            <label className="block text-sm text-white/60 mb-2">难度</label>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className="w-full px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="easy">简单</option>
+              <option value="medium">中等</option>
+              <option value="hard">困难</option>
+            </select>
+          </div>
+
+          {/* 知识库文档选择 */}
+          <div>
+            <label className="block text-sm text-white/60 mb-2">关联知识库文档（可多选）</label>
+            {loadingKBs ? (
+              <div className="text-white/60 text-center py-4">加载中...</div>
+            ) : knowledgeBases.length === 0 ? (
+              <div className="text-white/60 text-center py-4">暂无知识库</div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {knowledgeBases.map((kb) => (
+                  <div key={kb.id} className="border border-theme-sidebar-border rounded-lg p-3">
+                    <div className="font-medium text-white mb-2">{kb.name}</div>
+                    {kb.documents && kb.documents.length > 0 ? (
+                      <div className="space-y-1">
+                        {kb.documents.map((doc) => {
+                          const key = `${kb.id}-${doc.id}`;
+                          const isSelected = selectedDocs.includes(key);
+                          return (
+                            <label
+                              key={doc.id}
+                              className="flex items-center gap-2 p-2 hover:bg-theme-bg-primary rounded cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleDocument(kb.id, doc.id)}
+                                className="w-4 h-4"
+                              />
+                              <span className="text-sm text-white/80">
+                                {doc.file_name || doc.title || "未命名文档"}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-white/40 text-sm">暂无文档</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-theme-sidebar-border">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-white/60 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={loading || selectedDocs.length === 0}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? "创建中..." : "创建闪卡"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

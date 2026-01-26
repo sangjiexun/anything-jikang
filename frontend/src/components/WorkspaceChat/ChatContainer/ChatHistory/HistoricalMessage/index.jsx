@@ -152,6 +152,7 @@ const HistoricalMessage = ({
             forkThread={forkThread}
             metrics={metrics}
             alignmentCls={alignmentCls}
+            workspace={workspace}
           />
         </div>
         {role === "assistant" && <Citations sources={sources} />}

@@ -896,6 +896,7 @@ const TRANSLATIONS = {
     writing_workspace: "智能图文工作台",
     enhance: "加强",
     enhance_tooltip: "使用 Agent Skills 加强处理此消息",
+    create_flashcard: "创建问答闪卡",
     save_submit: "提交保存",
     cancel: "取消",
     edit_prompt: "编辑问题",
