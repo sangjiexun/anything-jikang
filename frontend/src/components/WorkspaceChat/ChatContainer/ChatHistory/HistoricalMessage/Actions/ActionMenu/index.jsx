@@ -436,13 +436,16 @@ ${message.substring(0, 8000)}`;
       } catch (parseError) {
         console.error("解析题目失败:", parseError);
         // 如果解析失败，尝试手动生成示例题目
+        const fallbackDoc = selectedDocs.length > 0 && knowledgeBases.length > 0
+          ? knowledgeBases.find(kb => kb.documents?.some(doc => selectedDocs.includes(`${kb.id}-${doc.id}`)))?.documents?.[0]
+          : null;
         flashcards = [
           {
-            question: "请根据知识库内容回答这个问题",
-            answer: "答案需要从知识库中提取",
-            explanation: "这是基于知识库内容生成的题目",
+            question: "请根据内容回答这个问题",
+            answer: "答案需要从内容中提取",
+            explanation: "这是基于内容生成的题目",
             reference: {
-              document: selectedDocuments[0]?.file_name || "未知文档",
+              document: fallbackDoc?.file_name || fallbackDoc?.title || "未知文档",
             },
           },
         ];
