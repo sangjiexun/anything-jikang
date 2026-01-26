@@ -1269,6 +1269,32 @@ does not extend the close button beyond the viewport. */
   background-color: #cccccc;
 }
 
+/* Workflow selector scrollbar */
+.workflow-scrollbar {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #6b7280 transparent;
+}
+
+.workflow-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  background-color: transparent;
+}
+
+.workflow-scrollbar::-webkit-scrollbar-track {
+  background-color: transparent;
+  border-radius: 3px;
+}
+
+.workflow-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #6b7280;
+  border-radius: 3px;
+}
+
+.workflow-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}
+
 /* Recharts rendering styles */
 .recharts-text > * {
   fill: #fff;
