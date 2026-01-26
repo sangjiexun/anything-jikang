@@ -73,19 +73,12 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
           style: {
             version: 8,
             sources: {
-              "arcgis-osm": {
+              // ArcGIS开源底图服务（静态瓦片）
+              "arcgis-basemap": {
                 type: "raster",
                 tiles: [
-                  "https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/tile/{z}/{y}/{x}.pbf"
-                ],
-                tileSize: 512,
-                attribution: "© Esri, OpenStreetMap contributors"
-              },
-              // 备用：ArcGIS静态瓦片服务（开源OSM风格）
-              "arcgis-static": {
-                type: "raster",
-                tiles: [
-                  "https://basemaps.arcgis.com/v1/arcgis/rest/services/World_Basemap/MapServer/tile/{z}/{y}/{x}"
+                  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+                  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
                 ],
                 tileSize: 256,
                 attribution: "© Esri"
@@ -95,7 +88,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
               {
                 id: "arcgis-base",
                 type: "raster",
-                source: "arcgis-static",
+                source: "arcgis-basemap",
                 minzoom: 0,
                 maxzoom: 19
               }
