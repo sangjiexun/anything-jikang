@@ -2,169 +2,130 @@ import React, { useState, useEffect, useRef } from "react";
 import { callAmapTool, getAmapMCPConfig } from "@/utils/mcp/amapTools";
 import { MapPin, Compass, Clock, Star, X, CaretRight } from "@phosphor-icons/react";
 
-// HUD风格地图组件（使用Mapbox GL JS）
-function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
+// HUD风格地图组件（使用高德地图 + Loca.js）
+function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const locaInstanceRef = useRef(null);
+  const markersRef = useRef([]);
+  const routeLayerRef = useRef(null);
+  const hoverInfoRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [hoveredPoi, setHoveredPoi] = useState(null);
 
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !apiKey) return;
 
-    // 加载Mapbox GL JS（开源HUD风格地图）
-    const loadMapbox = () => {
+    // 加载高德地图脚本
+    const loadAmapScript = () => {
       return new Promise((resolve, reject) => {
-        if (window.mapboxgl) {
+        // 检查是否已加载
+        if (window.AMap && window.Loca) {
           resolve();
           return;
         }
 
-        // 加载Mapbox GL CSS
-        const link = document.createElement("link");
-        link.href = "https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css";
-        link.rel = "stylesheet";
-        document.head.appendChild(link);
+        // 加载 jQuery (如果需要)
+        if (!window.jQuery) {
+          const jqScript = document.createElement("script");
+          jqScript.src = "//g.alicdn.com/code/lib/jquery/1.11.3/jquery.min.js";
+          jqScript.crossOrigin = "anonymous";
+          document.head.appendChild(jqScript);
+        }
 
-        // 加载Mapbox GL JS
-        const script = document.createElement("script");
-        script.src = "https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js";
-        script.onload = () => {
-          if (window.mapboxgl) {
-            resolve();
+        // 检查是否已加载
+        if (window.AMap && window.Loca) {
+          setMapLoaded(true);
+          resolve();
+          return;
+        }
+
+        // 加载高德地图 JS API - 使用v2.0以支持Loca.js
+        const amapScript = document.createElement("script");
+        amapScript.src = `https://webapi.amap.com/maps?v=2.0&key=${apiKey}`;
+        amapScript.async = true;
+        amapScript.defer = true;
+        
+        amapScript.onload = () => {
+          if (window.AMap) {
+            // 加载Loca.js用于流动路线动画
+            if (!window.Loca) {
+              const locaScript = document.createElement("script");
+              locaScript.src = `https://webapi.amap.com/loca?v=2.0.0&key=${apiKey}`;
+              locaScript.async = true;
+              locaScript.defer = true;
+              locaScript.onload = () => {
+                if (window.Loca) {
+                  setMapLoaded(true);
+                  resolve();
+                } else {
+                  reject(new Error("Loca.js加载失败"));
+                }
+              };
+              locaScript.onerror = () => {
+                reject(new Error("Loca.js加载失败"));
+              };
+              document.head.appendChild(locaScript);
+            } else {
+              setMapLoaded(true);
+              resolve();
+            }
           } else {
-            reject(new Error("Mapbox GL JS加载失败"));
+            reject(new Error("地图API加载失败"));
           }
         };
-        script.onerror = () => reject(new Error("Mapbox GL JS加载失败"));
-        document.head.appendChild(script);
+        
+        amapScript.onerror = () => {
+          reject(new Error("高德地图加载失败"));
+        };
+        
+        document.head.appendChild(amapScript);
       });
     };
 
-    loadMapbox()
+    loadAmapScript()
       .then(() => {
-        if (!window.mapboxgl || !mapRef.current) return;
+        if (!window.AMap || !mapRef.current) return;
 
-        // 使用公开的Mapbox token（或用户可以配置自己的）
-        window.mapboxgl.accessToken = "pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXV4NTFyemYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw";
-
-        // 初始化地图 - HUD风格（深色主题）
-        const map = new window.mapboxgl.Map({
-          container: mapRef.current,
-          style: "mapbox://styles/mapbox/dark-v11", // 深色HUD风格
-          center: center || [116.397428, 39.90923],
+        // 初始化地图 - HUD风格（深色主题，3D视角）
+        const map = new window.AMap.Map(mapRef.current, {
           zoom: zoom,
-          pitch: 45, // 3D视角
-          bearing: -17.6,
+          center: center || [116.397428, 39.90923],
+          viewMode: "3D", // 3D视角
+          pitch: 60, // 俯仰角
+          rotation: -15, // 旋转角度
+          mapStyle: "amap://styles/dark", // 深色HUD风格
+          showLabel: false,
+          resizeEnable: true,
         });
 
-        map.on("load", () => {
+        map.on("complete", () => {
           setMapLoaded(true);
           mapInstanceRef.current = map;
 
-          // 绘制路线
-          if (route && route.length > 0) {
-            map.addSource("route", {
-              type: "geojson",
-              data: {
-                type: "Feature",
-                geometry: {
-                  type: "LineString",
-                  coordinates: route,
-                },
-              },
-            });
-
-            map.addLayer({
-              id: "route",
-              type: "line",
-              source: "route",
-              layout: {
-                "line-join": "round",
-                "line-cap": "round",
-              },
-              paint: {
-                "line-color": "#00ff88",
-                "line-width": 4,
-                "line-opacity": 0.8,
-              },
-            });
-
-            // 添加路线动画
-            map.addLayer({
-              id: "route-animation",
-              type: "line",
-              source: "route",
-              layout: {
-                "line-join": "round",
-                "line-cap": "round",
-              },
-              paint: {
-                "line-color": "#00ffff",
-                "line-width": 6,
-                "line-opacity": 0.6,
-                "line-dasharray": [2, 2],
-              },
+          // 创建Loca容器用于流动路线
+          if (window.Loca && !locaInstanceRef.current) {
+            locaInstanceRef.current = new window.Loca.Container({
+              map: map,
             });
           }
 
-          // 添加POI标记
+          // 绘制流动路线
+          if (route && route.length > 0 && window.Loca) {
+            drawAnimatedRoute(map, route);
+          }
+
+          // 绘制科技感坐标标记
           if (pois.length > 0) {
-            map.addSource("pois", {
-              type: "geojson",
-              data: {
-                type: "FeatureCollection",
-                features: pois.map((poi, index) => ({
-                  type: "Feature",
-                  geometry: {
-                    type: "Point",
-                    coordinates: poi.coordinates,
-                  },
-                  properties: {
-                    id: index,
-                    name: poi.name,
-                    description: poi.description,
-                  },
-                })),
-              },
-            });
-
-            // 添加标记图层
-            map.addLayer({
-              id: "pois",
-              type: "circle",
-              source: "pois",
-              paint: {
-                "circle-radius": 8,
-                "circle-color": "#ff6b6b",
-                "circle-stroke-width": 2,
-                "circle-stroke-color": "#ffffff",
-              },
-            });
-
-            // 添加点击事件
-            map.on("click", "pois", (e) => {
-              const feature = e.features[0];
-              if (feature && onPoiClick) {
-                onPoiClick(feature.properties);
-              }
-            });
-
-            // 鼠标悬停效果
-            map.on("mouseenter", "pois", () => {
-              map.getCanvas().style.cursor = "pointer";
-            });
-
-            map.on("mouseleave", "pois", () => {
-              map.getCanvas().style.cursor = "";
-            });
+            drawTechMarkers(map, pois);
           }
 
           // 调整视野以包含所有点
           if (route.length > 0 || pois.length > 0) {
-            const bounds = new window.mapboxgl.LngLatBounds();
+            const bounds = new window.AMap.Bounds();
             route.forEach((coord) => bounds.extend(coord));
             pois.forEach((poi) => bounds.extend(poi.coordinates));
-            map.fitBounds(bounds, { padding: 50 });
+            map.setBounds(bounds);
           }
         });
       })
@@ -173,19 +134,252 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
       });
 
     return () => {
+      // 清理标记
+      markersRef.current.forEach((marker) => {
+        if (marker) marker.setMap(null);
+      });
+      markersRef.current = [];
+
+      // 清理路线图层
+      if (routeLayerRef.current && locaInstanceRef.current) {
+        try {
+          locaInstanceRef.current.remove(routeLayerRef.current);
+        } catch (e) {
+          console.warn("清理路线图层失败:", e);
+        }
+        routeLayerRef.current = null;
+      }
+
+      // 清理Loca实例
+      if (locaInstanceRef.current) {
+        try {
+          locaInstanceRef.current.destroy();
+        } catch (e) {
+          console.warn("清理Loca实例失败:", e);
+        }
+        locaInstanceRef.current = null;
+      }
+
+      // 清理悬停信息窗口
+      if (hoverInfoRef.current) {
+        hoverInfoRef.current.close();
+        hoverInfoRef.current = null;
+      }
+
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
       }
     };
-  }, [center, zoom, route, pois, onPoiClick]);
+  }, [center, zoom, route, pois, onPoiClick, apiKey]);
+
+  // 绘制流动路线（使用Loca.js PulseLineLayer）
+  const drawAnimatedRoute = (map, routeCoords) => {
+    if (!window.Loca || !locaInstanceRef.current || !routeCoords || routeCoords.length < 2) return;
+
+    try {
+      const loca = locaInstanceRef.current;
+
+      // 创建GeoJSON数据源
+      const geo = new window.Loca.GeoJSONSource({
+        data: {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: routeCoords,
+          },
+        },
+      });
+
+      // 创建脉冲线图层（流动路线）
+      const layer = new window.Loca.PulseLineLayer({
+        zIndex: 10,
+        opacity: 1,
+        visible: true,
+        zooms: [2, 22],
+      });
+
+      layer.setSource(geo);
+      layer.setStyle({
+        altitude: 0,
+        lineWidth: 8,
+        headColor: "#00ffff", // 青色脉冲头
+        trailColor: "rgba(0, 255, 136, 0.6)", // 绿色脉冲尾
+        interval: 1,
+        duration: 3000, // 3秒跑完整段路
+      });
+
+      loca.add(layer);
+      loca.animate.start();
+      routeLayerRef.current = layer;
+
+      // 同时绘制静态路线作为背景
+      const staticPolyline = new window.AMap.Polyline({
+        path: routeCoords,
+        strokeColor: "#00ff88",
+        strokeWeight: 4,
+        strokeOpacity: 0.8,
+        lineJoin: "round",
+        lineCap: "round",
+      });
+      staticPolyline.setMap(map);
+    } catch (error) {
+      console.error("绘制流动路线失败:", error);
+    }
+  };
+
+  // 绘制科技感坐标标记
+  const drawTechMarkers = (map, pois) => {
+    if (!window.AMap || !pois || pois.length === 0) return;
+
+    try {
+      // 清理旧标记
+      markersRef.current.forEach((marker) => {
+        if (marker) marker.setMap(null);
+      });
+      markersRef.current = [];
+
+      pois.forEach((poi, index) => {
+        if (!poi.coordinates) return;
+
+        // 创建科技感自定义图标
+        const icon = new window.AMap.Icon({
+          size: new window.AMap.Size(40, 40),
+          image: createTechMarkerIcon(poi, index),
+          imageSize: new window.AMap.Size(40, 40),
+        });
+
+        // 创建标记
+        const marker = new window.AMap.Marker({
+          position: poi.coordinates,
+          icon: icon,
+          title: poi.name,
+          zIndex: 100 + index,
+        });
+
+        // 鼠标悬停显示卡片
+        marker.on("mouseover", () => {
+          setHoveredPoi(poi);
+          showHoverCard(map, poi, marker);
+        });
+
+        marker.on("mouseout", () => {
+          setHoveredPoi(null);
+          hideHoverCard();
+        });
+
+        // 点击事件
+        marker.on("click", () => {
+          if (onPoiClick) {
+            onPoiClick({ id: index, name: poi.name, description: poi.description });
+          }
+        });
+
+        marker.setMap(map);
+        markersRef.current.push(marker);
+      });
+    } catch (error) {
+      console.error("绘制标记失败:", error);
+    }
+  };
+
+  // 创建科技感标记图标（使用Canvas绘制）
+  const createTechMarkerIcon = (poi, index) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 40;
+    canvas.height = 40;
+    const ctx = canvas.getContext("2d");
+
+    // 绘制外圈（发光效果）
+    const gradient = ctx.createRadialGradient(20, 20, 0, 20, 20, 20);
+    gradient.addColorStop(0, "rgba(0, 255, 136, 0.8)");
+    gradient.addColorStop(0.5, "rgba(0, 255, 255, 0.4)");
+    gradient.addColorStop(1, "rgba(0, 255, 136, 0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(20, 20, 20, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 绘制内圈（科技感）
+    ctx.fillStyle = "#00ff88";
+    ctx.beginPath();
+    ctx.arc(20, 20, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 绘制中心点
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(20, 20, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 绘制编号
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(index + 1), 20, 20);
+
+    return canvas.toDataURL();
+  };
+
+  // 显示悬停卡片
+  const showHoverCard = (map, poi, marker) => {
+    if (!map || !marker || hoverInfoRef.current) return;
+
+    const content = `
+      <div style="
+        background: linear-gradient(135deg, rgba(0, 51, 102, 0.95), rgba(51, 0, 102, 0.95));
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 255, 136, 0.3);
+        border-radius: 12px;
+        padding: 12px;
+        min-width: 200px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      ">
+        <div style="
+          color: #00ff88;
+          font-size: 16px;
+          font-weight: bold;
+          margin-bottom: 8px;
+        ">${poi.name || "景点"}</div>
+        ${poi.description ? `<div style="color: rgba(255, 255, 255, 0.8); font-size: 12px; margin-top: 4px;">${poi.description}</div>` : ""}
+        ${poi.distance ? `<div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; margin-top: 6px;">📍 ${poi.distance}</div>` : ""}
+      </div>
+    `;
+
+    const infoWindow = new window.AMap.InfoWindow({
+      content: content,
+      offset: new window.AMap.Pixel(0, -40),
+      closeWhenClickMap: false,
+    });
+
+    infoWindow.open(map, marker.getPosition());
+    hoverInfoRef.current = infoWindow;
+  };
+
+  // 隐藏悬停卡片
+  const hideHoverCard = () => {
+    if (hoverInfoRef.current) {
+      hoverInfoRef.current.close();
+      hoverInfoRef.current = null;
+    }
+  };
 
   return (
     <div
       ref={mapRef}
-      className="w-full h-full rounded-lg overflow-hidden"
+      className="w-full h-full rounded-lg overflow-hidden relative"
       style={{ minHeight: "400px" }}
-    />
+    >
+      {!mapLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-10">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+            <p className="text-cyan-300">正在加载地图...</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -567,6 +761,7 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
           </div>
         ) : (
           <HUDMap
+            apiKey={getAmapMCPConfig()?.apiKey || getAmapMCPConfig()?.webApiKey}
             center={attractions[0]?.coordinates || [116.397428, 39.90923]}
             zoom={13}
             route={route}
