@@ -336,30 +336,6 @@ export default function WorkflowDesigner() {
     }
   };
 
-  // 处理滚轮缩放 - 直接滚轮缩放，以鼠标位置为中心
-  const handleWheel = (e) => {
-    e.preventDefault();
-    
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    // 鼠标在画布中的位置
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    
-    // 计算缩放比例
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.min(Math.max(zoom * delta, 0.2), 3);
-    
-    // 以鼠标位置为中心缩放
-    const zoomRatio = newZoom / zoom;
-    const newPanX = mouseX - (mouseX - pan.x) * zoomRatio;
-    const newPanY = mouseY - (mouseY - pan.y) * zoomRatio;
-    
-    setZoom(newZoom);
-    setPan({ x: newPanX, y: newPanY });
-  };
-
   // 节点拖拽开始
   const handleNodeDragStart = (e, nodeId) => {
     e.stopPropagation();
@@ -684,6 +660,37 @@ export default function WorkflowDesigner() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undo, redo, selectedNode, deleteNode]);
 
+  // 滚轮缩放事件 - 使用非 passive 监听器以支持 preventDefault
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const wheelHandler = (e) => {
+      e.preventDefault();
+      
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      
+      setZoom((prevZoom) => {
+        const newZoom = Math.min(Math.max(prevZoom * delta, 0.2), 3);
+        const zoomRatio = newZoom / prevZoom;
+        
+        setPan((prevPan) => ({
+          x: mouseX - (mouseX - prevPan.x) * zoomRatio,
+          y: mouseY - (mouseY - prevPan.y) * zoomRatio,
+        }));
+        
+        return newZoom;
+      });
+    };
+
+    canvas.addEventListener("wheel", wheelHandler, { passive: false });
+    return () => canvas.removeEventListener("wheel", wheelHandler);
+  }, []);
+
   return (
     <div className="flex h-screen bg-theme-bg-container">
       {/* 左侧边栏 */}
@@ -865,7 +872,6 @@ export default function WorkflowDesigner() {
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleCanvasMouseUp}
-            onWheel={handleWheel}
             onDrop={handleCanvasDrop}
             onDragOver={(e) => e.preventDefault()}
             onContextMenu={(e) => e.preventDefault()}
