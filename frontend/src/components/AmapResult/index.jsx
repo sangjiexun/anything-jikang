@@ -21,71 +21,244 @@ export default function AmapResult({ query, onResult }) {
     let params = {};
 
     try {
-      // 检测工具类型
-      if (lowerQuery.includes("逆地理编码") || lowerQuery.includes("坐标转地址")) {
-        // 提取坐标
-        const coordMatch = queryText.match(/(\d+\.?\d*)[,，]\s*(\d+\.?\d*)/);
-        if (coordMatch) {
+      // 提取坐标的正则表达式（支持多种格式）
+      const coordPattern = /(\d+\.?\d*)[,，\s]+(\d+\.?\d*)/g;
+      const coords = [];
+      let match;
+      while ((match = coordPattern.exec(queryText)) !== null) {
+        coords.push(`${match[1]},${match[2]}`);
+      }
+
+      // 1. 逆地理编码（坐标转地址）
+      if (
+        lowerQuery.includes("逆地理编码") ||
+        lowerQuery.includes("坐标转地址") ||
+        lowerQuery.includes("坐标对应的地址") ||
+        lowerQuery.includes("这个坐标") ||
+        (coords.length > 0 && (lowerQuery.includes("地址") || lowerQuery.includes("位置")))
+      ) {
+        if (coords.length > 0) {
           tool = "maps_regeocode";
-          params = { location: `${coordMatch[1]},${coordMatch[2]}` };
+          params = { location: coords[0] };
         }
-      } else if (lowerQuery.includes("地理编码") || lowerQuery.includes("地址转坐标")) {
-        // 提取地址
-        const addressMatch = queryText.match(/(?:地址|位置)[:：]?\s*([^，,。.]+)/);
-        if (addressMatch) {
+      }
+      // 2. 正向地理编码（地址转坐标）
+      else if (
+        lowerQuery.includes("地理编码") ||
+        lowerQuery.includes("地址转坐标") ||
+        lowerQuery.includes("地址的坐标") ||
+        lowerQuery.includes("这个地址") ||
+        (lowerQuery.includes("地址") && !lowerQuery.includes("坐标转"))
+      ) {
+        // 提取地址 - 更灵活的匹配
+        let address = null;
+        
+        // 尝试多种模式提取地址
+        const patterns = [
+          /(?:地址|位置|地点)[:：]?\s*([^，,。.\n]+)/,
+          /(?:查询|查找|搜索)[:：]?\s*([^，,。.\n]+?)(?:的坐标|的经纬度|在哪里)/,
+          /^([^，,。.\n]+?)(?:的坐标|的经纬度|在哪里|地址)/,
+          /(?:在|到|去|位于)\s*([^，,。.\n]+)/,
+        ];
+        
+        for (const pattern of patterns) {
+          const match = queryText.match(pattern);
+          if (match && match[1]) {
+            address = match[1].trim();
+            // 移除常见的前缀词
+            address = address.replace(/^(北京|上海|广州|深圳|杭州|成都|武汉|西安|南京|天津|苏州|重庆|长沙|郑州|东莞|青岛|沈阳|宁波|昆明|大连|厦门|合肥|佛山|石家庄|福州|无锡|哈尔滨|济南|长春|南昌|太原|南宁|贵阳|海口|兰州|银川|西宁|呼和浩特|乌鲁木齐|拉萨|香港|澳门|台湾)/, "");
+            if (address.length > 0 && address.length < 50) break;
+          }
+        }
+        
+        // 如果没有匹配到，尝试提取整个查询（排除坐标）
+        if (!address || address.length === 0) {
+          address = queryText
+            .replace(coordPattern, "")
+            .replace(/(?:地址|坐标|位置|查询|查找|搜索|的|在哪里|经纬度)/g, "")
+            .trim();
+          if (address.length > 50) address = address.substring(0, 50);
+        }
+        
+        if (address && address.length > 0) {
           tool = "maps_geo";
-          params = { address: addressMatch[1] };
+          params = { address };
         }
-      } else if (lowerQuery.includes("天气")) {
-        // 提取城市
-        const cityMatch = queryText.match(/(?:城市|地点)[:：]?\s*([^，,。.]+)/);
+      }
+      // 3. 天气查询
+      else if (
+        lowerQuery.includes("天气") ||
+        lowerQuery.includes("温度") ||
+        lowerQuery.includes("气温")
+      ) {
         tool = "maps_weather";
-        params = { city: cityMatch ? cityMatch[1] : "北京" };
-      } else if (lowerQuery.includes("搜索") || lowerQuery.includes("查找")) {
-        // 提取关键词
-        const keywordMatch = queryText.match(/(?:搜索|查找)[:：]?\s*([^，,。.]+)/);
-        if (keywordMatch) {
-          tool = "maps_text_search";
-          params = { keywords: keywordMatch[1] };
+        // 提取城市名称
+        let city = "北京"; // 默认城市
+        
+        const cityPatterns = [
+          /(?:北京|上海|广州|深圳|杭州|成都|武汉|西安|南京|天津|苏州|重庆|长沙|郑州|东莞|青岛|沈阳|宁波|昆明|大连|厦门|合肥|佛山|石家庄|福州|无锡|哈尔滨|济南|长春|南昌|太原|南宁|贵阳|海口|兰州|银川|西宁|呼和浩特|乌鲁木齐|拉萨|香港|澳门|台湾)/,
+          /(?:城市|地点|位置)[:：]?\s*([^，,。.\n]+)/,
+          /([^，,。.\n]+?)(?:的天气|天气)/,
+        ];
+        
+        for (const pattern of cityPatterns) {
+          const match = queryText.match(pattern);
+          if (match) {
+            city = match[1] || match[0];
+            city = city.replace(/(?:的天气|天气|温度|气温)/g, "").trim();
+            if (city.length > 0 && city.length < 20) break;
+          }
         }
-      } else if (lowerQuery.includes("周边") || lowerQuery.includes("附近")) {
-        // 周边搜索
-        const keywordMatch = queryText.match(/(?:搜索|查找)[:：]?\s*([^，,。.]+)/);
-        const coordMatch = queryText.match(/(\d+\.?\d*)[,，]\s*(\d+\.?\d*)/);
-        if (keywordMatch && coordMatch) {
-          tool = "maps_around_search";
-          params = {
-            location: `${coordMatch[1]},${coordMatch[2]}`,
-            keywords: keywordMatch[1],
-          };
-        }
-      } else if (lowerQuery.includes("路线") || lowerQuery.includes("导航")) {
-        // 路线规划
-        const coords = queryText.match(/(\d+\.?\d*)[,，]\s*(\d+\.?\d*)/g);
-        if (coords && coords.length >= 2) {
-          const origin = coords[0].replace(/[，,]/g, ",");
-          const destination = coords[1].replace(/[，,]/g, ",");
+        
+        params = { city };
+      }
+      // 4. 路线规划
+      else if (
+        lowerQuery.includes("路线") ||
+        lowerQuery.includes("导航") ||
+        lowerQuery.includes("怎么走") ||
+        lowerQuery.includes("怎么去") ||
+        lowerQuery.includes("到") ||
+        (lowerQuery.includes("从") && lowerQuery.includes("到"))
+      ) {
+        // 提取起点和终点
+        let origin = null;
+        let destination = null;
+        
+        // 优先使用坐标
+        if (coords.length >= 2) {
+          origin = coords[0];
+          destination = coords[1];
+        } else {
+          // 尝试从文本中提取地址
+          const fromMatch = queryText.match(/(?:从|起点|出发地)[:：]?\s*([^，,。.\n到]+)/);
+          const toMatch = queryText.match(/(?:到|去|终点|目的地)[:：]?\s*([^，,。.\n]+)/);
           
-          if (lowerQuery.includes("步行") || lowerQuery.includes("走路")) {
+          if (fromMatch && toMatch) {
+            origin = fromMatch[1].trim();
+            destination = toMatch[1].trim();
+          } else if (coords.length === 1) {
+            // 只有一个坐标，尝试提取另一个地址
+            const addressMatch = queryText.match(/(?:到|去|终点|目的地)[:：]?\s*([^，,。.\n]+)/);
+            if (addressMatch) {
+              origin = coords[0];
+              destination = addressMatch[1].trim();
+            }
+          }
+        }
+        
+        if (origin && destination) {
+          // 确定路线类型
+          if (lowerQuery.includes("步行") || lowerQuery.includes("走路") || lowerQuery.includes("徒步")) {
             tool = "maps_direction_walking";
-          } else if (lowerQuery.includes("骑行") || lowerQuery.includes("骑车")) {
+          } else if (lowerQuery.includes("骑行") || lowerQuery.includes("骑车") || lowerQuery.includes("自行车")) {
             tool = "maps_bicycling";
-          } else if (lowerQuery.includes("公交") || lowerQuery.includes("地铁")) {
+          } else if (lowerQuery.includes("公交") || lowerQuery.includes("地铁") || lowerQuery.includes("公共交通") || lowerQuery.includes("公共交通")) {
             tool = "maps_direction_transit_integrated";
-            params.city = "北京"; // 默认城市
+            // 尝试提取城市
+            const cityMatch = queryText.match(/(?:北京|上海|广州|深圳|杭州|成都|武汉|西安|南京|天津|苏州|重庆|长沙|郑州|东莞|青岛|沈阳|宁波|昆明|大连|厦门|合肥|佛山|石家庄|福州|无锡|哈尔滨|济南|长春|南昌|太原|南宁|贵阳|海口|兰州|银川|西宁|呼和浩特|乌鲁木齐|拉萨|香港|澳门|台湾)/);
+            params.city = cityMatch ? cityMatch[0] : "北京";
           } else {
             tool = "maps_direction_driving";
           }
+          
           params.origin = origin;
           params.destination = destination;
         }
-      } else if (lowerQuery.includes("距离")) {
-        // 距离测量
-        const coords = queryText.match(/(\d+\.?\d*)[,，]\s*(\d+\.?\d*)/g);
-        if (coords && coords.length >= 2) {
+      }
+      // 5. 距离测量
+      else if (
+        lowerQuery.includes("距离") ||
+        lowerQuery.includes("多远") ||
+        lowerQuery.includes("多少公里")
+      ) {
+        if (coords.length >= 2) {
           tool = "maps_distance";
-          params.origins = coords[0].replace(/[，,]/g, ",");
-          params.destination = coords[1].replace(/[，,]/g, ",");
+          params.origins = coords[0];
+          params.destination = coords[1];
+        }
+      }
+      // 6. 周边搜索
+      else if (
+        lowerQuery.includes("周边") ||
+        lowerQuery.includes("附近") ||
+        lowerQuery.includes("周围")
+      ) {
+        let location = null;
+        let keywords = null;
+        
+        // 提取位置（坐标或地址）
+        if (coords.length > 0) {
+          location = coords[0];
+        } else {
+          const locationMatch = queryText.match(/(?:在|位于|附近|周边|周围)[:：]?\s*([^，,。.\n]+?)(?:的|附近|周边|周围)/);
+          if (locationMatch) {
+            location = locationMatch[1].trim();
+          }
+        }
+        
+        // 提取关键词
+        const keywordPatterns = [
+          /(?:搜索|查找|找|附近|周边|周围)[:：]?\s*([^，,。.\n]+)/,
+          /([^，,。.\n]+?)(?:附近|周边|周围)/,
+        ];
+        
+        for (const pattern of keywordPatterns) {
+          const match = queryText.match(pattern);
+          if (match && match[1]) {
+            keywords = match[1].trim();
+            if (keywords.length > 0 && keywords.length < 30) break;
+          }
+        }
+        
+        if (location && keywords) {
+          tool = "maps_around_search";
+          params = { location, keywords };
+        }
+      }
+      // 7. 文本搜索
+      else if (
+        lowerQuery.includes("搜索") ||
+        lowerQuery.includes("查找") ||
+        lowerQuery.includes("找") ||
+        lowerQuery.includes("哪里有")
+      ) {
+        // 提取关键词
+        let keywords = null;
+        
+        const keywordPatterns = [
+          /(?:搜索|查找|找|哪里有)[:：]?\s*([^，,。.\n]+)/,
+          /([^，,。.\n]+?)(?:在哪里|在哪儿|位置)/,
+        ];
+        
+        for (const pattern of keywordPatterns) {
+          const match = queryText.match(pattern);
+          if (match && match[1]) {
+            keywords = match[1].trim();
+            // 移除常见后缀
+            keywords = keywords.replace(/(?:在哪里|在哪儿|位置|地址|坐标)/g, "").trim();
+            if (keywords.length > 0 && keywords.length < 30) break;
+          }
+        }
+        
+        // 如果没有匹配到，尝试提取整个查询（排除坐标和常见词）
+        if (!keywords || keywords.length === 0) {
+          keywords = queryText
+            .replace(coordPattern, "")
+            .replace(/(?:搜索|查找|找|在哪里|在哪儿|位置|地址|坐标|的)/g, "")
+            .trim();
+          if (keywords.length > 30) keywords = keywords.substring(0, 30);
+        }
+        
+        if (keywords && keywords.length > 0) {
+          tool = "maps_text_search";
+          params = { keywords };
+          
+          // 尝试提取城市
+          const cityMatch = queryText.match(/(?:北京|上海|广州|深圳|杭州|成都|武汉|西安|南京|天津|苏州|重庆|长沙|郑州|东莞|青岛|沈阳|宁波|昆明|大连|厦门|合肥|佛山|石家庄|福州|无锡|哈尔滨|济南|长春|南昌|太原|南宁|贵阳|海口|兰州|银川|西宁|呼和浩特|乌鲁木齐|拉萨|香港|澳门|台湾)/);
+          if (cityMatch) {
+            params.city = cityMatch[0];
+          }
         }
       }
 
@@ -95,7 +268,20 @@ export default function AmapResult({ query, onResult }) {
         setResult(result);
         if (onResult) onResult(result);
       } else {
-        setError("无法识别的地图查询，请尝试：地址转坐标、坐标转地址、天气查询、路线规划等");
+        setError(
+          <div>
+            <p className="mb-2">无法识别的地图查询，请尝试以下方式：</p>
+            <ul className="list-disc list-inside space-y-1 text-sm">
+              <li>地址转坐标：如"北京市天安门广场的坐标"</li>
+              <li>坐标转地址：如"116.397128,39.916527的地址"</li>
+              <li>天气查询：如"北京天气"或"上海的温度"</li>
+              <li>路线规划：如"从北京到上海的路线"或"116.397128,39.916527到121.473701,31.230416"</li>
+              <li>搜索POI：如"搜索附近的餐厅"或"找北京的天安门"</li>
+              <li>周边搜索：如"116.397128,39.916527附近的酒店"</li>
+              <li>距离测量：如"116.397128,39.916527到121.473701,31.230416的距离"</li>
+            </ul>
+          </div>
+        );
       }
     } catch (err) {
       setError(err.message || "调用地图工具失败");
