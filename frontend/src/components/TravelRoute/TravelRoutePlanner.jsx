@@ -134,42 +134,70 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
       });
 
     return () => {
-      // 清理标记
-      markersRef.current.forEach((marker) => {
-        if (marker) marker.setMap(null);
-      });
-      markersRef.current = [];
-
-      // 清理路线图层
-      if (routeLayerRef.current && locaInstanceRef.current) {
+      // 使用setTimeout延迟清理，避免与React的DOM清理冲突
+      setTimeout(() => {
         try {
-          locaInstanceRef.current.remove(routeLayerRef.current);
-        } catch (e) {
-          console.warn("清理路线图层失败:", e);
+          // 清理标记
+          if (markersRef.current && markersRef.current.length > 0) {
+            markersRef.current.forEach((marker) => {
+              try {
+                if (marker && marker.setMap) {
+                  marker.setMap(null);
+                }
+              } catch (e) {
+                // 忽略单个标记清理错误
+              }
+            });
+            markersRef.current = [];
+          }
+
+          // 清理路线图层
+          if (routeLayerRef.current && locaInstanceRef.current) {
+            try {
+              locaInstanceRef.current.remove(routeLayerRef.current);
+            } catch (e) {
+              // 忽略清理错误
+            }
+            routeLayerRef.current = null;
+          }
+
+          // 清理Loca实例
+          if (locaInstanceRef.current) {
+            try {
+              locaInstanceRef.current.destroy();
+            } catch (e) {
+              // 忽略清理错误
+            }
+            locaInstanceRef.current = null;
+          }
+
+          // 清理悬停信息窗口
+          if (hoverInfoRef.current) {
+            try {
+              hoverInfoRef.current.close();
+            } catch (e) {
+              // 忽略关闭错误
+            }
+            hoverInfoRef.current = null;
+          }
+
+          // 清理地图实例（最后清理）
+          if (mapInstanceRef.current) {
+            try {
+              // 检查地图容器是否还存在
+              if (mapRef.current && mapRef.current.parentNode) {
+                mapInstanceRef.current.destroy();
+              }
+            } catch (e) {
+              // 忽略销毁错误
+            }
+            mapInstanceRef.current = null;
+          }
+        } catch (error) {
+          // 忽略所有清理错误，避免影响React的清理流程
+          console.warn("地图清理过程中出现错误（已忽略）:", error);
         }
-        routeLayerRef.current = null;
-      }
-
-      // 清理Loca实例
-      if (locaInstanceRef.current) {
-        try {
-          locaInstanceRef.current.destroy();
-        } catch (e) {
-          console.warn("清理Loca实例失败:", e);
-        }
-        locaInstanceRef.current = null;
-      }
-
-      // 清理悬停信息窗口
-      if (hoverInfoRef.current) {
-        hoverInfoRef.current.close();
-        hoverInfoRef.current = null;
-      }
-
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.destroy();
-        mapInstanceRef.current = null;
-      }
+      }, 0);
     };
   }, [center, zoom, route, pois, onPoiClick, apiKey]);
 
@@ -178,6 +206,16 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
     if (!window.Loca || !locaInstanceRef.current || !routeCoords || routeCoords.length < 2) return;
 
     try {
+      // 先清理旧的路线图层
+      if (routeLayerRef.current && locaInstanceRef.current) {
+        try {
+          locaInstanceRef.current.remove(routeLayerRef.current);
+        } catch (e) {
+          // 忽略清理错误
+        }
+        routeLayerRef.current = null;
+      }
+
       const loca = locaInstanceRef.current;
 
       // 创建GeoJSON数据源
@@ -234,49 +272,67 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey }) {
 
     try {
       // 清理旧标记
-      markersRef.current.forEach((marker) => {
-        if (marker) marker.setMap(null);
-      });
-      markersRef.current = [];
+      if (markersRef.current && markersRef.current.length > 0) {
+        markersRef.current.forEach((marker) => {
+          try {
+            if (marker && marker.setMap) {
+              marker.setMap(null);
+              // 移除事件监听器
+              if (marker.off) {
+                marker.off("mouseover");
+                marker.off("mouseout");
+                marker.off("click");
+              }
+            }
+          } catch (e) {
+            // 忽略单个标记清理错误
+          }
+        });
+        markersRef.current = [];
+      }
 
       pois.forEach((poi, index) => {
         if (!poi.coordinates) return;
 
-        // 创建科技感自定义图标
-        const icon = new window.AMap.Icon({
-          size: new window.AMap.Size(40, 40),
-          image: createTechMarkerIcon(poi, index),
-          imageSize: new window.AMap.Size(40, 40),
-        });
+        try {
+          // 创建科技感自定义图标
+          const icon = new window.AMap.Icon({
+            size: new window.AMap.Size(40, 40),
+            image: createTechMarkerIcon(poi, index),
+            imageSize: new window.AMap.Size(40, 40),
+          });
 
-        // 创建标记
-        const marker = new window.AMap.Marker({
-          position: poi.coordinates,
-          icon: icon,
-          title: poi.name,
-          zIndex: 100 + index,
-        });
+          // 创建标记
+          const marker = new window.AMap.Marker({
+            position: poi.coordinates,
+            icon: icon,
+            title: poi.name,
+            zIndex: 100 + index,
+          });
 
-        // 鼠标悬停显示卡片
-        marker.on("mouseover", () => {
-          setHoveredPoi(poi);
-          showHoverCard(map, poi, marker);
-        });
+          // 鼠标悬停显示卡片
+          marker.on("mouseover", () => {
+            setHoveredPoi(poi);
+            showHoverCard(map, poi, marker);
+          });
 
-        marker.on("mouseout", () => {
-          setHoveredPoi(null);
-          hideHoverCard();
-        });
+          marker.on("mouseout", () => {
+            setHoveredPoi(null);
+            hideHoverCard();
+          });
 
-        // 点击事件
-        marker.on("click", () => {
-          if (onPoiClick) {
-            onPoiClick({ id: index, name: poi.name, description: poi.description });
-          }
-        });
+          // 点击事件
+          marker.on("click", () => {
+            if (onPoiClick) {
+              onPoiClick({ id: index, name: poi.name, description: poi.description });
+            }
+          });
 
-        marker.setMap(map);
-        markersRef.current.push(marker);
+          marker.setMap(map);
+          markersRef.current.push(marker);
+        } catch (error) {
+          console.warn(`创建标记 ${index} 失败:`, error);
+        }
       });
     } catch (error) {
       console.error("绘制标记失败:", error);
