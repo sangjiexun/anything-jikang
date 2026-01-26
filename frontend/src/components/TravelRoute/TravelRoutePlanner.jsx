@@ -111,7 +111,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
           setMapLoaded(true);
           mapInstanceRef.current = map;
 
-          // 如果有路线数据，使用高德地图路线规划API绘制
+          // 如果有路线数据，使用MCP高德服务获取路线规划数据并绘制
           if (routeData && routeData.origin && routeData.destination) {
             drawAmapRoute(map, routeData);
           } else if (route && route.length > 0) {
@@ -283,8 +283,8 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
     };
   }, [center, zoom, route, pois, onPoiClick, apiKey, routeData]);
 
-  // 使用高德地图路线规划API绘制路线（参考用户提供的代码）
-  const drawAmapRoute = (map, routeData) => {
+  // 使用MCP高德服务获取路线规划数据并绘制路线
+  const drawAmapRoute = async (map, routeData) => {
     if (!window.AMap || !map || !routeData.origin || !routeData.destination) return;
 
     try {
@@ -302,49 +302,87 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick, apiKey, route
         endMarkerRef.current = null;
       }
 
-      // 构造路线导航类
-      const drivingOption = {
-        policy: window.AMap.DrivingPolicy.LEAST_TIME, // 最短时间
-        ferry: 1, // 可以使用轮渡
-        province: routeData.province || '京', // 车牌省份
-      };
+      // 检查MCP配置
+      const config = getAmapMCPConfig();
+      if (!config || !config.apiKey) {
+        console.error("高德地图MCP未配置");
+        return;
+      }
 
-      const driving = new window.AMap.Driving(drivingOption);
-
-      // 解析起点和终点坐标
-      const origin = Array.isArray(routeData.origin) 
-        ? new window.AMap.LngLat(routeData.origin[0], routeData.origin[1])
+      // 格式化起点和终点坐标（格式：经度,纬度）
+      const originStr = Array.isArray(routeData.origin)
+        ? `${routeData.origin[0]},${routeData.origin[1]}`
         : routeData.origin;
-      const destination = Array.isArray(routeData.destination)
-        ? new window.AMap.LngLat(routeData.destination[0], routeData.destination[1])
+      const destinationStr = Array.isArray(routeData.destination)
+        ? `${routeData.destination[0]},${routeData.destination[1]}`
         : routeData.destination;
 
-      // 根据起终点经纬度规划驾车导航路线
-      driving.search(origin, destination, (status, result) => {
-        if (status === 'complete') {
-          if (result.routes && result.routes.length) {
-            // 绘制第一条路线
-            drawRoutePath(map, result.routes[0]);
-          }
-        } else {
-          console.error('获取驾车数据失败：', result);
-        }
+      // 使用MCP高德服务获取驾车路线规划数据
+      const routeResult = await callAmapTool("maps_direction_driving", {
+        origin: originStr,
+        destination: destinationStr,
       });
+
+      if (routeResult && routeResult.success && routeResult.data) {
+        // 解析MCP返回的路线数据并绘制
+        const route = routeResult.data;
+        if (route.paths && route.paths.length > 0) {
+          // 使用第一条路径
+          const path = route.paths[0];
+          drawRoutePathFromMCP(map, path, routeData.origin, routeData.destination);
+        } else {
+          console.warn("MCP返回的路线数据中没有路径信息");
+        }
+      } else {
+        console.error("MCP路线规划失败:", routeResult?.message || "未知错误");
+      }
     } catch (error) {
       console.error("绘制高德路线失败:", error);
     }
   };
 
-  // 解析并绘制路线路径（参考用户提供的代码）
-  const drawRoutePath = (map, route) => {
+  // 从MCP返回的路线数据绘制路径
+  const drawRoutePathFromMCP = (map, pathData, origin, destination) => {
     try {
-      // 解析DrivingRoute对象，构造成路径数组
-      const path = [];
-      for (let i = 0, l = route.steps.length; i < l; i++) {
-        const step = route.steps[i];
-        for (let j = 0, n = step.path.length; j < n; j++) {
-          path.push(step.path[j]);
-        }
+      // 解析MCP返回的路径数据
+      // MCP返回的路径格式可能是字符串 "lng1,lat1;lng2,lat2;..." 或数组
+      let path = [];
+      
+      if (typeof pathData === 'string') {
+        // 字符串格式：经度,纬度;经度,纬度;...
+        path = pathData.split(';').map(point => {
+          const [lng, lat] = point.split(',').map(Number);
+          if (!isNaN(lng) && !isNaN(lat) && isValidCoordinate([lng, lat])) {
+            return new window.AMap.LngLat(lng, lat);
+          }
+          return null;
+        }).filter(p => p !== null);
+      } else if (Array.isArray(pathData)) {
+        // 数组格式
+        path = pathData.map(point => {
+          if (Array.isArray(point) && point.length >= 2) {
+            const [lng, lat] = point;
+            if (isValidCoordinate([lng, lat])) {
+              return new window.AMap.LngLat(lng, lat);
+            }
+          } else if (point && typeof point === 'object' && point.lng && point.lat) {
+            if (isValidCoordinate([point.lng, point.lat])) {
+              return new window.AMap.LngLat(point.lng, point.lat);
+            }
+          }
+          return null;
+        }).filter(p => p !== null);
+      }
+
+      // 如果路径为空，使用起点和终点创建简单路径
+      if (path.length === 0) {
+        const originLngLat = Array.isArray(origin)
+          ? new window.AMap.LngLat(origin[0], origin[1])
+          : origin;
+        const destLngLat = Array.isArray(destination)
+          ? new window.AMap.LngLat(destination[0], destination[1])
+          : destination;
+        path = [originLngLat, destLngLat];
       }
 
       if (path.length === 0) return;
@@ -887,31 +925,36 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
       }
     });
 
-    // 使用高德MCP搜索地址获取坐标
-    if (addresses.length > 0) {
-      const config = getAmapMCPConfig();
-      if (config && config.apiKey) {
-        for (const address of addresses) {
-          try {
-            const geoResult = await callAmapTool("maps_geo", {
-              address: address,
-            });
+      // 使用高德MCP服务搜索地址获取坐标
+      if (addresses.length > 0) {
+        const config = getAmapMCPConfig();
+        if (!config || !config.apiKey) {
+          console.warn("高德地图MCP未配置，无法搜索地址坐标");
+        } else {
+          for (const address of addresses) {
+            try {
+              // 使用MCP maps_geo工具进行正向地理编码
+              const geoResult = await callAmapTool("maps_geo", {
+                address: address,
+              });
 
-            if (geoResult && geoResult.success && geoResult.data) {
-              const location = geoResult.data.location;
-              if (location) {
-                const [lng, lat] = location.split(",").map(Number);
-                if (!isNaN(lng) && !isNaN(lat) && isValidCoordinate([lng, lat])) {
-                  coordinates.push([lng, lat]);
+              if (geoResult && geoResult.success && geoResult.data) {
+                const location = geoResult.data.location;
+                if (location) {
+                  const [lng, lat] = location.split(",").map(Number);
+                  if (!isNaN(lng) && !isNaN(lat) && isValidCoordinate([lng, lat])) {
+                    coordinates.push([lng, lat]);
+                  }
                 }
+              } else {
+                console.warn(`MCP地理编码失败: ${geoResult?.message || "未知错误"}`);
               }
+            } catch (error) {
+              console.warn(`通过高德MCP搜索地址"${address}"失败:`, error);
             }
-          } catch (error) {
-            console.warn(`通过高德MCP搜索地址"${address}"失败:`, error);
           }
         }
       }
-    }
 
     // 然后匹配直接提供的坐标格式：经度,纬度 或 纬度,经度
     const coordPatterns = [
@@ -1091,25 +1134,48 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
           `${city}市${attractionName}`,
         ];
 
+        // 使用MCP高德服务搜索景点坐标
         for (const addr of addressVariants) {
           try {
+            // 首先尝试使用maps_geo进行地理编码
             const geoResult = await callAmapTool("maps_geo", {
               address: addr,
             });
 
-        if (geoResult && geoResult.success && geoResult.data) {
-          const location = geoResult.data.location;
-          if (location) {
-            const [lng, lat] = location.split(",").map(Number);
-            if (!isNaN(lng) && !isNaN(lat) && lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
-              coordinates = [lng, lat];
-              address = geoResult.data.formatted_address || addr;
-              break;
+            if (geoResult && geoResult.success && geoResult.data) {
+              const location = geoResult.data.location;
+              if (location) {
+                const [lng, lat] = location.split(",").map(Number);
+                if (!isNaN(lng) && !isNaN(lat) && lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
+                  coordinates = [lng, lat];
+                  address = geoResult.data.formatted_address || addr;
+                  break;
+                }
+              }
             }
-          }
-        }
+            
+            // 如果地理编码失败，尝试使用文本搜索
+            if (!coordinates) {
+              const searchResult = await callAmapTool("maps_text_search", {
+                keywords: addr,
+                city: city,
+              });
+              
+              if (searchResult && searchResult.success && searchResult.data && searchResult.data.length > 0) {
+                const poi = searchResult.data[0];
+                if (poi.location) {
+                  const [lng, lat] = poi.location.split(",").map(Number);
+                  if (!isNaN(lng) && !isNaN(lat) && isValidCoordinate([lng, lat])) {
+                    coordinates = [lng, lat];
+                    address = poi.address || poi.name || addr;
+                    break;
+                  }
+                }
+              }
+            }
           } catch (error) {
             // 继续尝试下一个地址格式
+            console.warn(`搜索地址"${addr}"失败:`, error);
             continue;
           }
         }
@@ -1149,18 +1215,41 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
         return;
       }
 
-      // 计算距离（基于前一个景点）
+      // 使用MCP高德服务计算距离和时长（基于前一个景点）
       let distance = "起点";
       let duration = null;
       if (attractions.length > 0) {
         const prevCoord = attractions[attractions.length - 1].coordinates;
-        // 简单的距离估算（实际应该调用距离API）
-        const dist = Math.sqrt(
-          Math.pow(coordinates[0] - prevCoord[0], 2) +
-          Math.pow(coordinates[1] - prevCoord[1], 2)
-        ) * 111; // 粗略转换为公里
-        distance = `${dist.toFixed(1)}公里`;
-        duration = `${Math.round(dist * 2)}分钟`; // 假设平均速度30km/h
+        const prevCoordStr = `${prevCoord[0]},${prevCoord[1]}`;
+        const currCoordStr = `${coordinates[0]},${coordinates[1]}`;
+        
+        try {
+          // 使用MCP距离测量API
+          const distanceResult = await callAmapTool("maps_distance", {
+            origins: prevCoordStr,
+            destination: currCoordStr,
+          });
+          
+          if (distanceResult && distanceResult.success && distanceResult.data && distanceResult.data.length > 0) {
+            const distData = distanceResult.data[0];
+            if (distData.distance) {
+              const distKm = (distData.distance / 1000).toFixed(1);
+              distance = `${distKm}公里`;
+              // 假设平均速度30km/h计算时长
+              const durationMin = Math.round(distData.distance / 1000 / 30 * 60);
+              duration = `${durationMin}分钟`;
+            }
+          }
+        } catch (error) {
+          console.warn("获取距离失败，使用估算值:", error);
+          // 降级使用简单估算
+          const dist = Math.sqrt(
+            Math.pow(coordinates[0] - prevCoord[0], 2) +
+            Math.pow(coordinates[1] - prevCoord[1], 2)
+          ) * 111;
+          distance = `${dist.toFixed(1)}公里`;
+          duration = `${Math.round(dist * 2)}分钟`;
+        }
       }
 
       const newAttraction = {
@@ -1204,9 +1293,14 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
     setRoute([]);
 
     try {
+      // 检查MCP配置
       const config = getAmapMCPConfig();
       if (!config || !config.apiKey) {
-        throw new Error("未找到高德地图MCP配置");
+        throw new Error("未找到高德地图MCP配置，请在MCP设置中配置高德地图API Key");
+      }
+
+      if (!config.enabled) {
+        throw new Error("高德地图MCP未启用，请在MCP设置中启用");
       }
 
       // 解析查询，提取城市和景点信息
@@ -1233,16 +1327,37 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
         return;
       }
 
-      // 流式生成景点
-      const generatedAttractions = [];
-      
-      // 模拟流式输出，逐个生成景点
-      for (let i = 0; i < (attractionKeywords.length || 5); i++) {
-        await new Promise((resolve) => setTimeout(resolve, 800)); // 模拟延迟
+      // 如果没有关键词，使用MCP文本搜索推荐景点
+      if (attractionKeywords.length === 0) {
+        try {
+          // 使用MCP maps_text_search搜索城市景点
+          const searchResult = await callAmapTool("maps_text_search", {
+            keywords: `${city}景点`,
+            city: city,
+          });
 
-        let attractionName = attractionKeywords[i] || `${city}景点${i + 1}`;
-        
-        await addAttractionCard(attractionName);
+          if (searchResult && searchResult.success && searchResult.data) {
+            // 取前5个景点
+            const pois = searchResult.data.slice(0, 5);
+            for (const poi of pois) {
+              if (poi.location && poi.name) {
+                const [lng, lat] = poi.location.split(",").map(Number);
+                if (isValidCoordinate([lng, lat])) {
+                  await addAttractionCard(poi.name, city, [lng, lat], poi.address || poi.name);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.warn("使用MCP搜索景点失败:", error);
+        }
+      } else {
+        // 流式生成景点
+        for (let i = 0; i < attractionKeywords.length; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 800)); // 模拟延迟
+          let attractionName = attractionKeywords[i];
+          await addAttractionCard(attractionName, city);
+        }
       }
 
       setLoading(false);
