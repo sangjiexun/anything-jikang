@@ -8,7 +8,6 @@ import PasswordModal, { usePasswordModal } from "@/components/Modals/Password";
 import { isMobile } from "react-device-detect";
 import { FullScreenLoader } from "@/components/Preloader";
 import { LAST_VISITED_WORKSPACE } from "@/utils/constants";
-import LLMSelectorTop from "@/components/LLMSelector";
 
 export default function WorkspaceChat() {
   const { loading, requiresAuth, mode } = usePasswordModal();
@@ -54,11 +53,6 @@ function ShowWorkspaceChat() {
   return (
     <>
       <div className="w-screen h-screen overflow-hidden bg-theme-bg-container flex">
-        {/* 左上角 LLM 模型选择器 */}
-        <div className="fixed top-4 left-4 z-50">
-          <LLMSelectorTop />
-        </div>
-
         {!isMobile && <Sidebar />}
         <div className="flex-1 min-w-0">
           <WorkspaceChatContainer loading={loading} workspace={workspace} />

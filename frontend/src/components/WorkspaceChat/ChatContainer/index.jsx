@@ -22,6 +22,7 @@ import SpeechRecognition, {
 } from "react-speech-recognition";
 import { ChatTooltips } from "./ChatTooltips";
 import { MetricsProvider } from "./ChatHistory/HistoricalMessage/Actions/RenderMetrics";
+import LLMSelectorTop from "@/components/LLMSelector";
 
 export default function ChatContainer({ workspace, knownHistory = [] }) {
   const { threadSlug = null } = useParams();
@@ -304,6 +305,11 @@ export default function ChatContainer({ workspace, knownHistory = [] }) {
       style={{ height: isMobile ? "100%" : "calc(100% - 32px)" }}
       className="transition-all duration-500 relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-theme-bg-secondary w-full h-full overflow-y-scroll no-scroll z-[2]"
     >
+      {/* 右上角 LLM 模型选择器 */}
+      <div className="absolute top-4 right-4 z-20">
+        <LLMSelectorTop />
+      </div>
+
       {isMobile && <SidebarMobileHeader />}
       <DnDFileUploaderWrapper>
         <MetricsProvider>
