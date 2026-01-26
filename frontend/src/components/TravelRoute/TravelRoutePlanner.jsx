@@ -2,6 +2,30 @@ import React, { useState, useEffect, useRef } from "react";
 import { callAmapTool, getAmapMCPConfig } from "@/utils/mcp/amapTools";
 import { MapPin, Compass, Clock, Star, X, CaretRight } from "@phosphor-icons/react";
 
+// 加载高德地图脚本的工具函数
+const loadAmapScriptForRoute = (apiKey) => {
+  return new Promise((resolve, reject) => {
+    if (window.AMap && window.AMap.Driving) {
+      resolve();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = `https://webapi.amap.com/maps?v=1.4.15&key=${apiKey}&plugin=AMap.Driving`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (window.AMap && window.AMap.Driving) {
+        resolve();
+      } else {
+        reject(new Error("高德地图驾车路线API加载失败"));
+      }
+    };
+    script.onerror = () => reject(new Error("高德地图API加载失败"));
+    document.head.appendChild(script);
+  });
+};
+
 // 验证坐标是否有效（工具函数，可在组件间共享）
 const isValidCoordinate = (coord) => {
   if (!coord || !Array.isArray(coord) || coord.length < 2) return false;
@@ -161,9 +185,9 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
           setMapLoaded(true);
           mapInstanceRef.current = map;
 
-          // 绘制流动路线
+          // 绘制驾车路线（使用高德地图API）
           if (route && route.length > 0) {
-            drawAnimatedRoute(map, route);
+            drawDrivingRoute(map, route);
           }
 
           // 绘制科技感坐标标记
@@ -240,8 +264,9 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
           }
 
           // 清理路线图层
-          if (mapInstanceRef.current && routeSourceRef.current) {
+          if (mapInstanceRef.current) {
             try {
+              // 清理MapLibre路线图层
               if (mapInstanceRef.current.getLayer("route-animated")) {
                 mapInstanceRef.current.removeLayer("route-animated");
               }
@@ -253,6 +278,34 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
               }
               if (mapInstanceRef.current.getSource("route-animated")) {
                 mapInstanceRef.current.removeSource("route-animated");
+              }
+
+              // 清理高德地图路线
+              if (markersRef.current.routeLines) {
+                markersRef.current.routeLines.forEach((line) => {
+                  try {
+                    if (line && line.setMap) {
+                      line.setMap(null);
+                    }
+                  } catch (e) {
+                    // 忽略清理错误
+                  }
+                });
+                markersRef.current.routeLines = [];
+              }
+
+              // 清理起点终点标记
+              if (markersRef.current.routeMarkers) {
+                markersRef.current.routeMarkers.forEach((marker) => {
+                  try {
+                    if (marker && marker.setMap) {
+                      marker.setMap(null);
+                    }
+                  } catch (e) {
+                    // 忽略清理错误
+                  }
+                });
+                markersRef.current.routeMarkers = [];
               }
             } catch (e) {
               // 忽略清理错误
@@ -290,8 +343,8 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
     };
   }, [center, zoom, route, pois, onPoiClick]);
 
-  // 绘制流动路线（使用MapLibre GL JS + 自定义动画）
-  const drawAnimatedRoute = (map, routeCoords) => {
+  // 使用高德地图驾车路线规划API绘制路线
+  const drawDrivingRoute = async (map, routeCoords) => {
     if (!map || !routeCoords || routeCoords.length < 2) return;
 
     try {
@@ -302,6 +355,206 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
         return;
       }
 
+      // 获取高德MCP配置
+      const config = getAmapMCPConfig();
+      if (!config || !config.apiKey) {
+        console.warn("未找到高德地图MCP配置，使用简单路线绘制");
+        drawSimpleRoute(map, validCoords);
+        return;
+      }
+
+      // 加载高德地图JS API（如果未加载）
+      if (!window.AMap) {
+        await loadAmapScript(config.apiKey);
+      }
+
+      if (!window.AMap || !window.AMap.Driving) {
+        console.warn("高德地图API未加载，使用简单路线绘制");
+        drawSimpleRoute(map, validCoords);
+        return;
+      }
+
+      // 使用高德地图驾车路线规划
+      const driving = new window.AMap.Driving({
+        policy: window.AMap.DrivingPolicy.LEAST_TIME, // 最短时间
+        ferry: 1, // 可以使用轮渡
+      });
+
+      // 规划路线（连接所有坐标点）
+      const routePromises = [];
+      for (let i = 0; i < validCoords.length - 1; i++) {
+        const origin = validCoords[i];
+        const destination = validCoords[i + 1];
+        
+        routePromises.push(
+          new Promise((resolve) => {
+            driving.search(
+              new window.AMap.LngLat(origin[0], origin[1]),
+              new window.AMap.LngLat(destination[0], destination[1]),
+              (status, result) => {
+                if (status === "complete" && result.routes && result.routes.length > 0) {
+                  resolve(result.routes[0]);
+                } else {
+                  resolve(null);
+                }
+              }
+            );
+          })
+        );
+      }
+
+      const routes = await Promise.all(routePromises);
+      
+      // 绘制所有路线段
+      routes.forEach((route, index) => {
+        if (route) {
+          drawAmapRoute(map, route, index);
+        } else {
+          // 如果规划失败，绘制直线
+          const start = validCoords[index];
+          const end = validCoords[index + 1];
+          drawSimpleRouteSegment(map, start, end, index);
+        }
+      });
+
+      // 添加起点和终点标记
+      if (validCoords.length > 0) {
+        addStartEndMarkers(map, validCoords[0], validCoords[validCoords.length - 1]);
+      }
+
+    } catch (error) {
+      console.error("绘制驾车路线失败:", error);
+      // 失败时使用简单路线
+      drawSimpleRoute(map, validCoords);
+    }
+  };
+
+  // 加载高德地图脚本
+  const loadAmapScript = (apiKey) => {
+    return new Promise((resolve, reject) => {
+      if (window.AMap) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = `https://webapi.amap.com/maps?v=1.4.15&key=${apiKey}&plugin=AMap.Driving`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        if (window.AMap) {
+          resolve();
+        } else {
+          reject(new Error("高德地图API加载失败"));
+        }
+      };
+      script.onerror = () => reject(new Error("高德地图API加载失败"));
+      document.head.appendChild(script);
+    });
+  };
+
+  // 绘制高德地图路线
+  const drawAmapRoute = (map, route, index) => {
+    if (!window.AMap || !map) return;
+
+    try {
+      // 解析路线路径
+      const path = [];
+      if (route.steps) {
+        route.steps.forEach((step) => {
+          if (step.path) {
+            step.path.forEach((point) => {
+              path.push([point.lng, point.lat]);
+            });
+          }
+        });
+      }
+
+      if (path.length === 0) return;
+
+      // 创建Polyline（黑客风格 - 蓝色和黄色）
+      const polyline = new window.AMap.Polyline({
+        path: path,
+        isOutline: true,
+        outlineColor: "#ffff00", // 黄色外边框
+        borderWeight: 3,
+        strokeWeight: 6,
+        strokeColor: "#00ffff", // 青色路线（蓝色基调）
+        lineJoin: "round",
+        lineCap: "round",
+        strokeOpacity: 0.9,
+      });
+
+      polyline.setMap(map);
+      
+      // 保存引用以便清理
+      if (!markersRef.current.routeLines) {
+        markersRef.current.routeLines = [];
+      }
+      markersRef.current.routeLines.push(polyline);
+    } catch (error) {
+      console.error("绘制高德路线失败:", error);
+    }
+  };
+
+  // 绘制简单路线段（备用方案）
+  const drawSimpleRouteSegment = (map, start, end, index) => {
+    if (!window.AMap || !map) return;
+
+    try {
+      const polyline = new window.AMap.Polyline({
+        path: [start, end],
+        isOutline: true,
+        outlineColor: "#ffff00",
+        borderWeight: 3,
+        strokeWeight: 6,
+        strokeColor: "#00ffff",
+        lineJoin: "round",
+        lineCap: "round",
+      });
+
+      polyline.setMap(map);
+      
+      if (!markersRef.current.routeLines) {
+        markersRef.current.routeLines = [];
+      }
+      markersRef.current.routeLines.push(polyline);
+    } catch (error) {
+      console.error("绘制简单路线失败:", error);
+    }
+  };
+
+  // 添加起点和终点标记
+  const addStartEndMarkers = (map, start, end) => {
+    if (!window.AMap || !map) return;
+
+    try {
+      const startMarker = new window.AMap.Marker({
+        position: start,
+        icon: "https://webapi.amap.com/theme/v1.3/markers/n/start.png",
+        map: map,
+      });
+
+      const endMarker = new window.AMap.Marker({
+        position: end,
+        icon: "https://webapi.amap.com/theme/v1.3/markers/n/end.png",
+        map: map,
+      });
+
+      if (!markersRef.current.routeMarkers) {
+        markersRef.current.routeMarkers = [];
+      }
+      markersRef.current.routeMarkers.push(startMarker, endMarker);
+    } catch (error) {
+      console.error("添加起点终点标记失败:", error);
+    }
+  };
+
+  // 绘制简单路线（MapLibre备用方案）
+  const drawSimpleRoute = (map, routeCoords) => {
+    if (!map || !routeCoords || routeCoords.length < 2) return;
+
+    try {
       // 先清理旧的路线图层
       if (map.getLayer("route-animated")) {
         map.removeLayer("route-animated");
@@ -318,7 +571,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
         type: "Feature",
         geometry: {
           type: "LineString",
-          coordinates: validCoords,
+          coordinates: routeCoords,
         },
       };
 
