@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle, XCircle, ArrowRight, ArrowLeft, RotateCw } from "@phosphor-icons/react";
+import { CheckCircle, XCircle, ArrowRight, ArrowLeft, ArrowClockwise } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 
 export default function FlashcardViewer({ flashcards, onClose }) {
@@ -152,7 +152,7 @@ export default function FlashcardViewer({ flashcards, onClose }) {
                       onClick={handleFlip}
                       className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
                     >
-                      <RotateCw className="w-4 h-4" />
+                      <ArrowClockwise className="w-4 h-4" />
                       查看答案
                     </button>
                   </div>
@@ -230,7 +230,7 @@ export default function FlashcardViewer({ flashcards, onClose }) {
                   onClick={handleFlip}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
                 >
-                  <RotateCw className="w-4 h-4" />
+                  <ArrowClockwise className="w-4 h-4" />
                   返回题目
                 </button>
 
