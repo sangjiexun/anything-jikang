@@ -171,9 +171,17 @@ function FlashcardCreateModal({ workspace, message, onClose }) {
     try {
       const { API_BASE } = await import("@/utils/constants");
       const { baseHeaders } = await import("@/utils/request");
-      const response = await fetch(`${API_BASE}/knowledge-bases?mine=true`, {
+      const response = await fetch(`${API_BASE}/knowledge-bases?myAccess=true`, {
         headers: baseHeaders(),
       });
+      
+      if (!response.ok) {
+        // 如果API不存在，静默失败，允许不选择知识库的模式
+        console.warn("知识库API不可用，将使用基于消息内容的模式");
+        setKnowledgeBases([]);
+        return;
+      }
+      
       const result = await response.json();
       if (result.success && result.data) {
         setKnowledgeBases(result.data);
@@ -184,6 +192,8 @@ function FlashcardCreateModal({ workspace, message, onClose }) {
       }
     } catch (error) {
       console.error("加载知识库失败:", error);
+      // 静默失败，允许不选择知识库的模式
+      setKnowledgeBases([]);
     } finally {
       setLoadingKBs(false);
     }
@@ -223,79 +233,119 @@ function FlashcardCreateModal({ workspace, message, onClose }) {
   };
 
   const handleCreate = async () => {
-    if (selectedDocs.length === 0) {
-      showToast("请至少选择一个知识库文档", "warning");
-      return;
-    }
-
     setLoading(true);
     try {
-      // 获取选中的文档信息
-      const selectedDocuments = [];
-      knowledgeBases.forEach((kb) => {
-        kb.documents?.forEach((doc) => {
-          if (selectedDocs.includes(`${kb.id}-${doc.id}`)) {
-            selectedDocuments.push({
-              ...doc,
-              knowledgeBaseId: kb.id,
-              knowledgeBaseName: kb.name,
-            });
-          }
-        });
-      });
-
-      // 从知识库检索内容
-      showToast("正在从知识库检索内容...", "info");
       const { API_BASE } = await import("@/utils/constants");
       const { baseHeaders } = await import("@/utils/request");
-
-      // 检索所有选中文档的内容
-      let allContent = "";
-      const references = [];
       
-      for (const doc of selectedDocuments) {
-        try {
-          // 使用向量搜索获取相关内容
-          const searchResponse = await fetch(
-            `${API_BASE}/vector-search/knowledge-bases/${doc.knowledgeBaseId}/search`,
-            {
-              method: "POST",
-              headers: baseHeaders(),
-              body: JSON.stringify({
-                query: doc.file_name || doc.title || "",
-                topK: 5,
-                threshold: 0.3,
-                includeMetadata: true,
-              }),
-            }
-          );
-
-          if (searchResponse.ok) {
-            const searchResult = await searchResponse.json();
-            const results = searchResult.data?.results || searchResult.results || [];
-            
-            if (results.length > 0) {
-              const content = results.map((r) => r.content || r.preview || "").join("\n\n");
-              allContent += `\n\n--- 文档: ${doc.file_name || doc.title} ---\n${content}`;
-              
-              references.push({
-                document: doc.file_name || doc.title,
-                knowledgeBase: doc.knowledgeBaseName,
-                chunks: results.map((r) => ({
-                  content: r.content || r.preview || "",
-                  score: r.score || r.similarity || 0,
-                })),
+      const difficultyMap = {
+        easy: "简单（基础概念和定义）",
+        medium: "中等（需要理解和应用）",
+        hard: "困难（需要分析和综合）",
+      };
+      
+      let allContent = "";
+      let references = [];
+      let prompt = "";
+      
+      // 判断模式：有选择知识库文档 vs 无知识库（基于当前消息）
+      if (selectedDocs.length > 0) {
+        // 模式2：结合知识库的强化学习闪卡
+        showToast("正在从知识库检索内容...", "info");
+        
+        // 获取选中的文档信息
+        const selectedDocuments = [];
+        knowledgeBases.forEach((kb) => {
+          kb.documents?.forEach((doc) => {
+            if (selectedDocs.includes(`${kb.id}-${doc.id}`)) {
+              selectedDocuments.push({
+                ...doc,
+                knowledgeBaseId: kb.id,
+                knowledgeBaseName: kb.name,
               });
             }
-          }
-        } catch (error) {
-          console.error(`检索文档 ${doc.id} 失败:`, error);
-        }
-      }
+          });
+        });
 
-      if (!allContent.trim()) {
-        showToast("未能从知识库检索到内容", "warning");
-        return;
+        // 检索所有选中文档的内容
+        for (const doc of selectedDocuments) {
+          try {
+            // 使用向量搜索获取相关内容
+            const searchResponse = await fetch(
+              `${API_BASE}/vector-search/knowledge-bases/${doc.knowledgeBaseId}/search`,
+              {
+                method: "POST",
+                headers: baseHeaders(),
+                body: JSON.stringify({
+                  query: doc.file_name || doc.title || "",
+                  topK: 5,
+                  threshold: 0.3,
+                  includeMetadata: true,
+                }),
+              }
+            );
+
+            if (searchResponse.ok) {
+              const searchResult = await searchResponse.json();
+              const results = searchResult.data?.results || searchResult.results || [];
+              
+              if (results.length > 0) {
+                const content = results.map((r) => r.content || r.preview || "").join("\n\n");
+                allContent += `\n\n--- 文档: ${doc.file_name || doc.title} ---\n${content}`;
+                
+                references.push({
+                  document: doc.file_name || doc.title,
+                  knowledgeBase: doc.knowledgeBaseName,
+                  chunks: results.map((r) => ({
+                    content: r.content || r.preview || "",
+                    score: r.score || r.similarity || 0,
+                  })),
+                });
+              }
+            }
+          } catch (error) {
+            console.error(`检索文档 ${doc.id} 失败:`, error);
+          }
+        }
+
+        if (!allContent.trim()) {
+          showToast("未能从知识库检索到内容", "warning");
+          setLoading(false);
+          return;
+        }
+        
+        // 结合当前消息和知识库内容
+        prompt = `基于以下AI回答内容和知识库内容，生成 ${questionCount} 道${difficultyMap[difficulty]}难度的强化学习问答题目。
+
+要求：
+1. 题目应该结合AI回答的核心观点和知识库的详细内容
+2. 每道题目包含：问题、答案、解释、引用位置
+3. 难度级别：${difficultyMap[difficulty]}
+4. 返回JSON格式
+
+AI回答内容：
+${message || "无"}
+
+知识库内容：
+${allContent.substring(0, 8000)}`;
+      } else {
+        // 模式1：基于当前消息内容的闪卡
+        if (!message || !message.trim()) {
+          showToast("当前消息内容为空，无法生成闪卡", "warning");
+          setLoading(false);
+          return;
+        }
+        
+        prompt = `基于以下AI回答内容，生成 ${questionCount} 道${difficultyMap[difficulty]}难度的问答题目。
+
+要求：
+1. 题目应该覆盖回答的核心内容
+2. 每道题目包含：问题、答案、解释
+3. 难度级别：${difficultyMap[difficulty]}
+4. 返回JSON格式
+
+AI回答内容：
+${message.substring(0, 8000)}`;
       }
 
       // 调用LLM生成题目
@@ -319,22 +369,14 @@ function FlashcardCreateModal({ workspace, message, onClose }) {
 
       if (!llmConfig.apiKey) {
         showToast("请先配置LLM API Key", "warning");
+        setLoading(false);
         return;
       }
 
-      const difficultyMap = {
-        easy: "简单（基础概念和定义）",
-        medium: "中等（需要理解和应用）",
-        hard: "困难（需要分析和综合）",
-      };
+      // 构建完整的prompt（已在上面定义）
+      const fullPrompt = prompt + `
 
-      const prompt = `基于以下知识库内容，生成 ${questionCount} 道${difficultyMap[difficulty]}难度的问答题目。
-
-要求：
-1. 每道题目包含：问题、答案、解释、引用位置
-2. 题目应该覆盖知识库的核心内容
-3. 难度级别：${difficultyMap[difficulty]}
-4. 返回JSON格式，格式如下：
+返回JSON格式，格式如下：
 {
   "flashcards": [
     {
@@ -342,17 +384,14 @@ function FlashcardCreateModal({ workspace, message, onClose }) {
       "answer": "答案内容",
       "explanation": "详细解释",
       "reference": {
-        "document": "文档名称",
+        "document": "文档名称或来源",
         "excerpt": "引用片段（可选）",
         "page": "页码（如果有）",
         "section": "章节（如果有）"
       }
     }
   ]
-}
-
-知识库内容：
-${allContent.substring(0, 8000)}`;
+}`;
 
       const llmResponse = await fetch(`${llmConfig.endpoint}/v1/chat/completions`, {
         method: "POST",
@@ -365,9 +404,11 @@ ${allContent.substring(0, 8000)}`;
           messages: [
             {
               role: "system",
-              content: "你是一个专业的题目生成助手，能够根据知识库内容生成高质量的问答题目。请严格按照JSON格式返回结果。",
+              content: selectedDocs.length > 0 
+                ? "你是一个专业的题目生成助手，能够根据AI回答和知识库内容生成高质量的强化学习问答题目。请严格按照JSON格式返回结果。"
+                : "你是一个专业的题目生成助手，能够根据AI回答内容生成高质量的问答题目。请严格按照JSON格式返回结果。",
             },
-            { role: "user", content: prompt },
+            { role: "user", content: fullPrompt },
           ],
           temperature: 0.7,
           max_tokens: 4000,
@@ -481,13 +522,17 @@ ${allContent.substring(0, 8000)}`;
             </select>
           </div>
 
-          {/* 知识库文档选择 */}
+          {/* 知识库文档选择（可选） */}
           <div>
-            <label className="block text-sm text-white/60 mb-2">关联知识库文档（可多选）</label>
+            <label className="block text-sm text-white/60 mb-2">
+              关联知识库文档（可选，不选择则基于当前回答生成闪卡）
+            </label>
             {loadingKBs ? (
               <div className="text-white/60 text-center py-4">加载中...</div>
             ) : knowledgeBases.length === 0 ? (
-              <div className="text-white/60 text-center py-4">暂无知识库</div>
+              <div className="text-white/60 text-center py-4 text-xs">
+                暂无知识库，将基于当前回答内容生成闪卡
+              </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {knowledgeBases.map((kb) => (
@@ -536,10 +581,10 @@ ${allContent.substring(0, 8000)}`;
             <button
               type="button"
               onClick={handleCreate}
-              disabled={loading || selectedDocs.length === 0}
+              disabled={loading || !message?.trim()}
               className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "创建中..." : "创建闪卡"}
+              {loading ? "创建中..." : selectedDocs.length > 0 ? "创建强化学习闪卡" : "创建闪卡"}
             </button>
           </div>
         </div>
