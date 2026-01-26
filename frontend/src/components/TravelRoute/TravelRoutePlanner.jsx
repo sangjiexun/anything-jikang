@@ -267,7 +267,7 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
         data: geojson,
       });
 
-      // 绘制静态路线作为背景
+      // 绘制静态路线作为背景（Hue风格 - 柔和的蓝绿色）
       map.addLayer({
         id: "route-static",
         type: "line",
@@ -277,9 +277,9 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
           "line-cap": "round",
         },
         paint: {
-          "line-color": "#00ff88",
+          "line-color": "#7fb3d3", // 柔和的蓝绿色
           "line-width": 4,
-          "line-opacity": 0.8,
+          "line-opacity": 0.7,
         },
       });
 
@@ -330,9 +330,9 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
                 "line-cap": "round",
               },
               paint: {
-                "line-color": "#00ffff",
+                "line-color": "#a8d5e2", // Hue风格 - 柔和的青色
                 "line-width": 6,
-                "line-opacity": 0.9,
+                "line-opacity": 0.85,
               },
             });
           }
@@ -428,25 +428,40 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
     }
   };
 
-  // 创建科技感标记图标（使用Canvas绘制）
+  // 创建Hue风格标记图标（使用Canvas绘制 - 柔和配色）
   const createTechMarkerIcon = (poi, index) => {
     const canvas = document.createElement("canvas");
     canvas.width = 40;
     canvas.height = 40;
     const ctx = canvas.getContext("2d");
 
-    // 绘制外圈（发光效果）
+    // 判断是否为关键位置（从坐标直接创建的）
+    const isKeyLocation = poi.isKeyLocation;
+
+    // 绘制外圈（柔和的发光效果 - Hue风格）
     const gradient = ctx.createRadialGradient(20, 20, 0, 20, 20, 20);
-    gradient.addColorStop(0, "rgba(0, 255, 136, 0.8)");
-    gradient.addColorStop(0.5, "rgba(0, 255, 255, 0.4)");
-    gradient.addColorStop(1, "rgba(0, 255, 136, 0)");
+    if (isKeyLocation) {
+      // 关键位置使用柔和的橙色
+      gradient.addColorStop(0, "rgba(255, 183, 77, 0.6)");
+      gradient.addColorStop(0.5, "rgba(255, 224, 178, 0.3)");
+      gradient.addColorStop(1, "rgba(255, 183, 77, 0)");
+    } else {
+      // 普通景点使用柔和的蓝绿色
+      gradient.addColorStop(0, "rgba(127, 179, 211, 0.6)");
+      gradient.addColorStop(0.5, "rgba(168, 213, 226, 0.3)");
+      gradient.addColorStop(1, "rgba(127, 179, 211, 0)");
+    }
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(20, 20, 20, 0, Math.PI * 2);
     ctx.fill();
 
-    // 绘制内圈（科技感）
-    ctx.fillStyle = "#00ff88";
+    // 绘制内圈（Hue风格 - 柔和配色）
+    if (isKeyLocation) {
+      ctx.fillStyle = "#ffb74d"; // 柔和的橙色
+    } else {
+      ctx.fillStyle = "#7fb3d3"; // 柔和的蓝绿色
+    }
     ctx.beginPath();
     ctx.arc(20, 20, 12, 0, Math.PI * 2);
     ctx.fill();
@@ -457,12 +472,16 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
     ctx.arc(20, 20, 6, 0, Math.PI * 2);
     ctx.fill();
 
-    // 绘制编号
-    ctx.fillStyle = "#000000";
+    // 绘制编号或关键位置标识
+    ctx.fillStyle = "#333333"; // 柔和的深灰色文字
     ctx.font = "bold 14px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(String(index + 1), 20, 20);
+    if (isKeyLocation) {
+      ctx.fillText("★", 20, 20); // 关键位置显示星号
+    } else {
+      ctx.fillText(String(index + 1), 20, 20);
+    }
 
     return canvas.toDataURL();
   };
@@ -647,9 +666,76 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
     generateTravelRoute(query);
   }, [query]);
 
-  // 从流式消息中解析景点信息
+  // 从消息中提取坐标
+  const extractCoordinatesFromMessage = (messageText) => {
+    if (!messageText) return [];
+
+    const coordinates = [];
+    
+    // 匹配坐标格式：经度,纬度 或 纬度,经度
+    const coordPatterns = [
+      // 标准格式：116.397428,39.90923 或 39.90923,116.397428
+      /([-+]?\d+\.?\d*)[,，\s]+([-+]?\d+\.?\d*)/g,
+      // 带标签的格式：经度:116.397428,纬度:39.90923
+      /(?:经度|longitude|lng)[:：]\s*([-+]?\d+\.?\d*)[,，\s]*(?:纬度|latitude|lat)[:：]\s*([-+]?\d+\.?\d*)/gi,
+      // 带标签的格式：纬度:39.90923,经度:116.397428
+      /(?:纬度|latitude|lat)[:：]\s*([-+]?\d+\.?\d*)[,，\s]*(?:经度|longitude|lng)[:：]\s*([-+]?\d+\.?\d*)/gi,
+    ];
+
+    coordPatterns.forEach((pattern) => {
+      let match;
+      while ((match = pattern.exec(messageText)) !== null) {
+        let lng, lat;
+        
+        // 判断是经度在前还是纬度在前
+        if (match[0].toLowerCase().includes("lat") || match[0].toLowerCase().includes("纬度")) {
+          // 纬度在前的情况
+          lat = parseFloat(match[1]);
+          lng = parseFloat(match[2]);
+        } else {
+          // 默认经度在前
+          lng = parseFloat(match[1]);
+          lat = parseFloat(match[2]);
+        }
+
+        // 验证坐标范围（中国地区大致范围）
+        if (
+          !isNaN(lng) &&
+          !isNaN(lat) &&
+          lng >= 73 && lng <= 135 && // 中国经度范围
+          lat >= 18 && lat <= 54    // 中国纬度范围
+        ) {
+          coordinates.push([lng, lat]);
+        } else if (
+          !isNaN(lng) &&
+          !isNaN(lat) &&
+          lng >= -180 && lng <= 180 &&
+          lat >= -90 && lat <= 90
+        ) {
+          // 全球范围坐标也接受
+          coordinates.push([lng, lat]);
+        }
+      }
+    });
+
+    return [...new Set(coordinates.map(c => c.join(',')))].map(c => c.split(',').map(Number));
+  };
+
+  // 从流式消息中解析景点信息和坐标
   const parseAttractionsFromMessage = async (messageText) => {
     if (!messageText) return;
+
+    // 首先提取坐标
+    const extractedCoords = extractCoordinatesFromMessage(messageText);
+    if (extractedCoords.length > 0) {
+      // 如果有坐标，直接使用坐标创建关键位置点
+      for (let i = 0; i < extractedCoords.length; i++) {
+        const coord = extractedCoords[i];
+        if (isValidCoordinate(coord)) {
+          await addKeyLocationPoint(coord, `关键位置 ${i + 1}`);
+        }
+      }
+    }
 
     // 匹配景点模式：更智能的匹配
     const patterns = [
@@ -707,6 +793,45 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
       if (i < newAttractions.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
+    }
+  };
+
+  // 添加关键位置点（从坐标直接创建）
+  const addKeyLocationPoint = async (coordinates, name = "关键位置") => {
+    try {
+      const newAttraction = {
+        id: Date.now() + Math.random(),
+        name: name,
+        description: `坐标位置：${coordinates[0].toFixed(6)}, ${coordinates[1].toFixed(6)}`,
+        coordinates: coordinates,
+        distance: attractions.length > 0 ? "计算中..." : "起点",
+        duration: null,
+        address: null,
+        details: [
+          `经度：${coordinates[0].toFixed(6)}`,
+          `纬度：${coordinates[1].toFixed(6)}`,
+          "这是您提问中的关键位置坐标",
+        ],
+        isKeyLocation: true, // 标记为关键位置
+      };
+
+      setAttractions((prev) => {
+        const updated = [...prev, newAttraction];
+        
+        // 更新路线（只包含有效坐标）
+        if (updated.length > 1) {
+          const routeCoords = updated
+            .map((a) => a.coordinates)
+            .filter((coord) => coord && isValidCoordinate(coord));
+          if (routeCoords.length >= 2) {
+            setRoute(routeCoords);
+          }
+        }
+        
+        return updated;
+      });
+    } catch (error) {
+      console.error("添加关键位置点失败:", error);
     }
   };
 
