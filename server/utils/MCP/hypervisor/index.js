@@ -469,6 +469,11 @@ class MCPHypervisor {
     
     // 监听服务器响应，确保初始化完成
     let initializeComplete = false;
+    let initializePromiseResolve = null;
+    const initializePromise = new Promise((resolve) => {
+      initializePromiseResolve = resolve;
+    });
+    
     const originalOnMessage = transport.onmessage;
     transport.onmessage = (message) => {
       this.log(`${name} - Transport message:`, message);
@@ -477,6 +482,9 @@ class MCPHypervisor {
       if (message && message.result && message.result.protocolVersion) {
         this.log(`${name} - Received initialize response, protocol version: ${message.result.protocolVersion}`);
         initializeComplete = true;
+        if (initializePromiseResolve) {
+          initializePromiseResolve();
+        }
       }
       
       // 调用原始的消息处理器
@@ -486,17 +494,22 @@ class MCPHypervisor {
     };
     
     const connectionPromise = mcp.connect(transport).then(async () => {
-      // 连接成功后，等待初始化完成
+      // 连接成功后，等待初始化响应
       // 某些MCP服务器（特别是npx启动的）需要额外时间来完成初始化
-      let waitCount = 0;
-      const maxWait = 10; // 最多等待10秒
-      while (!initializeComplete && waitCount < maxWait) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        waitCount++;
+      // 但connect()方法本身应该已经等待了初始化，所以这里只等待最多5秒
+      try {
+        await Promise.race([
+          initializePromise,
+          new Promise((resolve) => setTimeout(resolve, 5000))
+        ]);
+      } catch (e) {
+        // 忽略错误，继续执行
       }
       
       if (!initializeComplete) {
-        this.log(`${name} - Warning: Initialize response not received within ${maxWait} seconds, but continuing anyway`);
+        this.log(`${name} - Warning: Initialize response not received, but connect() completed, continuing anyway`);
+      } else {
+        this.log(`${name} - Initialize response confirmed`);
       }
       
       return true;
