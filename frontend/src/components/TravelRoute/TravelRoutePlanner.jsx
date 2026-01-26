@@ -77,21 +77,27 @@ function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
           },
           center: center || [116.397428, 39.90923],
           zoom: zoom,
-          pitch: 60, // 3D俯仰角
-          bearing: -15, // 旋转角度
+          pitch: 45, // 3D俯仰角（Hue风格使用较小的角度）
+          bearing: 0, // 旋转角度
         });
 
-        // 添加深色滤镜（HUD风格）
+        // 添加Hue风格滤镜（柔和配色）
         map.on("load", () => {
-          // 添加深色滤镜图层
+          // 添加Hue风格滤镜图层（柔和的低饱和度配色）
           map.addLayer({
-            id: "dark-filter",
+            id: "hue-filter",
             type: "background",
             paint: {
-              "background-color": "#0a0a0a",
-              "background-opacity": 0.3
+              "background-color": "#f5f5f0", // 柔和的米白色背景
+              "background-opacity": 0.4
             }
           });
+
+          // 添加颜色调整层（使用CSS滤镜效果实现Hue风格）
+          const filterContainer = mapRef.current;
+          if (filterContainer) {
+            filterContainer.style.filter = "saturate(0.3) brightness(1.1) contrast(0.9)";
+          }
 
           setMapLoaded(true);
           mapInstanceRef.current = map;
