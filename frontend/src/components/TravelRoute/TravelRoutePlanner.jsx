@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { callAmapTool, getAmapMCPConfig } from "@/utils/mcp/amapTools";
-import { MapPin, Navigation, Clock, Star, X, CaretRight } from "@phosphor-icons/react";
+import { MapPin, Compass, Clock, Star, X, CaretRight } from "@phosphor-icons/react";
 
 // HUD风格地图组件（使用Mapbox GL JS）
 function HUDMap({ center, zoom = 13, route, pois = [], onPoiClick }) {
@@ -230,7 +230,7 @@ function AttractionCard({ attraction, index, onClose, onNavigate }) {
       <div className="flex items-center gap-4 text-xs text-white/60 mb-3">
         {attraction.distance && (
           <div className="flex items-center gap-1">
-            <Navigation className="w-3 h-3" />
+            <Compass className="w-3 h-3" />
             <span>{attraction.distance}</span>
           </div>
         )}
@@ -248,7 +248,7 @@ function AttractionCard({ attraction, index, onClose, onNavigate }) {
             onClick={() => onNavigate && onNavigate(attraction.coordinates)}
             className="flex-1 px-3 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-1"
           >
-            <Navigation className="w-4 h-4" />
+            <Compass className="w-4 h-4" />
             导航
           </button>
         )}
@@ -618,7 +618,7 @@ export default function TravelRoutePlanner({ query, message, onComplete }) {
               onClick={() => handleNavigate(selectedPoi.coordinates)}
               className="mt-4 w-full px-4 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
             >
-              <Navigation className="w-5 h-5" />
+              <Compass className="w-5 h-5" />
               开始导航
             </button>
           </div>
