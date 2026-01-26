@@ -17,11 +17,16 @@ import {
   ArrowClockwise,
   ArrowsOutCardinal,
   Lightning,
+  Robot,
+  Gear,
+  SpinnerGap,
 } from "@phosphor-icons/react";
 import Sidebar from "@/components/Sidebar";
 import showToast from "@/utils/toast";
 import { NODE_TYPES, NODE_CATEGORIES } from "./nodeTypes";
 import Workflow from "@/models/workflow";
+import { API_BASE } from "@/utils/constants";
+import { baseHeaders } from "@/utils/request";
 
 // 生成唯一ID
 const generateId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -87,6 +92,33 @@ export default function WorkflowDesigner() {
   // 拖拽状态
   const [draggedNode, setDraggedNode] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  // 悬停连线
+  const [hoveredConnection, setHoveredConnection] = useState(null);
+
+  // AI 创建工作流模态框
+  const [showAiCreator, setShowAiCreator] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // 大模型配置模态框
+  const [showLLMConfig, setShowLLMConfig] = useState(false);
+  const [llmConfig, setLlmConfig] = useState(() => {
+    const saved = localStorage.getItem("workflow_llm_config");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      provider: "openai",
+      model: "gpt-4",
+      apiEndpoint: "",
+      apiKey: "",
+      temperature: 0.7,
+      maxTokens: 4096,
+    };
+  });
 
   // 历史记录
   const [history, setHistory] = useState([]);
@@ -436,6 +468,138 @@ export default function WorkflowDesigner() {
     }
   };
 
+  // 保存大模型配置
+  const saveLLMConfig = () => {
+    localStorage.setItem("workflow_llm_config", JSON.stringify(llmConfig));
+    setShowLLMConfig(false);
+    showToast("大模型配置已保存", "success");
+  };
+
+  // AI 生成工作流
+  const generateWorkflowWithAI = async () => {
+    if (!aiPrompt.trim()) {
+      showToast("请输入工作流描述", "warning");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    const systemPrompt = `你是一个工作流设计专家。根据用户的描述，生成一个JSON格式的工作流配置。
+
+可用的节点类型：
+- llm-deepseek: DeepSeek V3大语言模型，用于文本生成和对话
+- llm-gemini: Gemini Flash大语言模型
+- llm-qwen: 通义千问大语言模型
+- trigger-manual: 手动触发节点
+- trigger-schedule: 定时触发节点
+- trigger-webhook: Webhook触发节点
+- nlp-sentiment: 情感分析节点
+- nlp-summary: 文本摘要节点
+- nlp-translate: 翻译节点
+- nlp-keywords: 关键词提取节点
+- rag-query: 知识检索节点
+- rag-upload: 文档上传节点
+- image-gen: 图像生成节点
+- image-ocr: OCR识别节点
+- code-js: JavaScript代码执行节点
+- code-python: Python代码执行节点
+- logic-condition: 条件判断节点
+- logic-loop: 循环节点
+- logic-switch: 多路分支节点
+- http-request: HTTP请求节点
+- db-query: 数据库查询节点
+- chat: 对话节点
+
+请返回一个JSON对象，格式如下：
+{
+    "nodes": [
+        {
+            "id": "node_1",
+            "type": "节点类型",
+            "x": x坐标(从100开始，每个节点间隔250),
+            "y": y坐标(从100开始),
+            "config": { 节点配置 }
+        }
+    ],
+    "connections": [
+        {
+            "id": "conn_1",
+            "from": "源节点id",
+            "to": "目标节点id"
+        }
+    ]
+}
+
+只返回JSON，不要其他解释。`;
+
+    try {
+      // 使用配置的 API 或默认 API
+      const endpoint = llmConfig.apiEndpoint || `${API_BASE}/v1/openai`;
+      const apiKey = llmConfig.apiKey;
+
+      const response = await fetch(`${endpoint}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : baseHeaders()),
+        },
+        body: JSON.stringify({
+          model: llmConfig.model || "gpt-4",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: aiPrompt },
+          ],
+          temperature: llmConfig.temperature || 0.7,
+          max_tokens: llmConfig.maxTokens || 4096,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API 请求失败: ${response.status}`);
+      }
+
+      const data = await response.json();
+      let workflowJson = data.choices?.[0]?.message?.content || "";
+
+      // 提取 JSON
+      const jsonMatch = workflowJson.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        workflowJson = jsonMatch[0];
+      }
+
+      const generatedWorkflow = JSON.parse(workflowJson);
+
+      // 验证并应用生成的工作流
+      const validNodes = (generatedWorkflow.nodes || []).filter(
+        (node) => NODE_TYPES[node.type]
+      );
+
+      if (validNodes.length === 0) {
+        throw new Error("生成的工作流没有有效节点");
+      }
+
+      // 合并默认配置
+      validNodes.forEach((node) => {
+        const typeConfig = NODE_TYPES[node.type];
+        node.config = { ...typeConfig.config, ...node.config };
+      });
+
+      setWorkflow((prev) => ({
+        ...prev,
+        nodes: validNodes,
+        connections: generatedWorkflow.connections || [],
+      }));
+
+      setShowAiCreator(false);
+      setAiPrompt("");
+      showToast("工作流已生成", "success");
+    } catch (error) {
+      showToast("生成失败: " + error.message, "error");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // 运行工作流
   const runWorkflow = async () => {
     if ((workflow.nodes || []).length === 0) {
@@ -572,6 +736,24 @@ export default function WorkflowDesigner() {
             </button>
 
             <div className="w-px h-6 bg-theme-sidebar-border mx-2" />
+
+            {/* AI 创建按钮 */}
+            <button
+              onClick={() => setShowAiCreator(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all"
+            >
+              <Robot className="w-4 h-4" />
+              AI创建
+            </button>
+
+            {/* 大模型配置按钮 */}
+            <button
+              onClick={() => setShowLLMConfig(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary hover:bg-theme-action-menu-item-hover transition-colors"
+            >
+              <Gear className="w-4 h-4" />
+              配置
+            </button>
 
             <button
               onClick={saveWorkflow}
@@ -717,19 +899,44 @@ export default function WorkflowDesigner() {
                 const y1 = fromNode.y + 40;
                 const x2 = toNode.x;
                 const y2 = toNode.y + 40;
+                const midX = (x1 + x2) / 2;
+                const midY = (y1 + y2) / 2;
+                const isHovered = hoveredConnection === conn.id;
 
                 return (
                   <g key={conn.id}>
+                    {/* 透明的粗线用于增大点击区域 */}
                     <path
                       d={getBezierPath(x1, y1, x2, y2)}
-                      stroke="url(#connectionGradient)"
-                      strokeWidth="3"
+                      stroke="transparent"
+                      strokeWidth="20"
                       fill="none"
-                      className="pointer-events-auto cursor-pointer hover:stroke-red-500"
-                      onClick={() => deleteConnection(conn.id)}
+                      className="pointer-events-auto cursor-pointer"
+                      onMouseEnter={() => setHoveredConnection(conn.id)}
+                      onMouseLeave={() => setHoveredConnection(null)}
+                      onClick={() => {
+                        if (confirm("确定要删除此连接吗？")) {
+                          deleteConnection(conn.id);
+                        }
+                      }}
+                    />
+                    {/* 可见的连接线 */}
+                    <path
+                      d={getBezierPath(x1, y1, x2, y2)}
+                      stroke={isHovered ? "#ef4444" : "url(#connectionGradient)"}
+                      strokeWidth={isHovered ? "4" : "3"}
+                      fill="none"
+                      className="pointer-events-none transition-all duration-200"
                     />
                     {/* 箭头 */}
-                    <circle cx={x2} cy={y2} r="4" fill="#10b981" />
+                    <circle cx={x2} cy={y2} r="4" fill={isHovered ? "#ef4444" : "#10b981"} />
+                    {/* 悬停时显示删除图标 */}
+                    {isHovered && (
+                      <g transform={`translate(${midX - 12}, ${midY - 12})`}>
+                        <circle cx="12" cy="12" r="12" fill="#ef4444" />
+                        <text x="12" y="16" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold">×</text>
+                      </g>
+                    )}
                   </g>
                 );
               })}
@@ -1058,6 +1265,231 @@ export default function WorkflowDesigner() {
           )}
         </div>
       </div>
+
+      {/* AI 创建工作流模态框 */}
+      {showAiCreator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-theme-bg-secondary border border-theme-sidebar-border rounded-xl shadow-2xl w-[500px] max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-theme-sidebar-border">
+              <div className="flex items-center gap-2">
+                <Robot className="w-5 h-5 text-purple-400" />
+                <h2 className="text-lg font-bold text-theme-text-primary">
+                  AI 工作流创建器
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowAiCreator(false)}
+                className="p-1 hover:bg-theme-action-menu-item-hover rounded"
+              >
+                <X className="w-5 h-5 text-theme-text-secondary" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm text-theme-text-secondary mb-2">
+                  描述你想要的工作流
+                </label>
+                <textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="例如：创建一个文档问答工作流，用户上传文档后，可以针对文档内容进行问答"
+                  rows={4}
+                  className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-purple-500 resize-none"
+                />
+              </div>
+
+              <div className="bg-theme-bg-primary/50 rounded-lg p-3">
+                <h4 className="text-xs text-theme-text-secondary mb-2">提示示例：</h4>
+                <div className="space-y-1 text-xs text-theme-text-secondary">
+                  <p>• 创建一个自动翻译工作流</p>
+                  <p>• 设计一个RAG知识库问答系统</p>
+                  <p>• 构建一个数据处理管道</p>
+                  <p>• 制作一个自动化内容生成流程</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-theme-sidebar-border">
+              <button
+                onClick={() => setShowAiCreator(false)}
+                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={generateWorkflowWithAI}
+                disabled={isGenerating || !aiPrompt.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50"
+              >
+                {isGenerating ? (
+                  <>
+                    <SpinnerGap className="w-4 h-4 animate-spin" />
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <Robot className="w-4 h-4" />
+                    生成工作流
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 大模型配置模态框 */}
+      {showLLMConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-theme-bg-secondary border border-theme-sidebar-border rounded-xl shadow-2xl w-[500px] max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-theme-sidebar-border">
+              <div className="flex items-center gap-2">
+                <Gear className="w-5 h-5 text-blue-400" />
+                <h2 className="text-lg font-bold text-theme-text-primary">
+                  大模型执行配置
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowLLMConfig(false)}
+                className="p-1 hover:bg-theme-action-menu-item-hover rounded"
+              >
+                <X className="w-5 h-5 text-theme-text-secondary" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
+              <div>
+                <label className="block text-sm text-theme-text-secondary mb-2">
+                  模型提供商
+                </label>
+                <select
+                  value={llmConfig.provider}
+                  onChange={(e) =>
+                    setLlmConfig((prev) => ({ ...prev, provider: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic (Claude)</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="qwen">通义千问</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="ollama">Ollama (本地)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-theme-text-secondary mb-2">
+                  模型名称
+                </label>
+                <input
+                  type="text"
+                  value={llmConfig.model}
+                  onChange={(e) =>
+                    setLlmConfig((prev) => ({ ...prev, model: e.target.value }))
+                  }
+                  placeholder="gpt-4, claude-3-sonnet, deepseek-chat..."
+                  className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-theme-text-secondary mb-2">
+                  API 端点 (可选)
+                </label>
+                <input
+                  type="text"
+                  value={llmConfig.apiEndpoint}
+                  onChange={(e) =>
+                    setLlmConfig((prev) => ({ ...prev, apiEndpoint: e.target.value }))
+                  }
+                  placeholder="https://api.openai.com/v1"
+                  className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-theme-text-secondary mb-2">
+                  API Key
+                </label>
+                <input
+                  type="password"
+                  value={llmConfig.apiKey}
+                  onChange={(e) =>
+                    setLlmConfig((prev) => ({ ...prev, apiKey: e.target.value }))
+                  }
+                  placeholder="sk-..."
+                  className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-theme-text-secondary mb-2">
+                    Temperature
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={llmConfig.temperature}
+                    onChange={(e) =>
+                      setLlmConfig((prev) => ({
+                        ...prev,
+                        temperature: parseFloat(e.target.value) || 0.7,
+                      }))
+                    }
+                    className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-theme-text-secondary mb-2">
+                    Max Tokens
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="128000"
+                    step="1"
+                    value={llmConfig.maxTokens}
+                    onChange={(e) =>
+                      setLlmConfig((prev) => ({
+                        ...prev,
+                        maxTokens: parseInt(e.target.value) || 4096,
+                      }))
+                    }
+                    className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-theme-bg-primary/50 rounded-lg p-3">
+                <p className="text-xs text-theme-text-secondary">
+                  💡 这些配置将用于工作流中的大模型节点执行。如果使用系统内置的 LLM，可以留空 API 配置。
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-theme-sidebar-border">
+              <button
+                onClick={() => setShowLLMConfig(false)}
+                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={saveLLMConfig}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                <FloppyDisk className="w-4 h-4" />
+                保存配置
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
