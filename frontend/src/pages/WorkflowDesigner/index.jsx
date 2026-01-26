@@ -24,7 +24,7 @@ import {
 import Sidebar from "@/components/Sidebar";
 import showToast from "@/utils/toast";
 import { NODE_TYPES, NODE_CATEGORIES } from "./nodeTypes";
-import Workflow from "@/models/workflow";
+// Workflow model no longer needed - using localStorage only
 
 // 生成唯一ID
 const generateId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -459,32 +459,6 @@ export default function WorkflowDesigner() {
       setWorkflow(workflowToSave);
 
       showToast("工作流已保存", "success");
-
-      // 尝试保存到服务器（可选，不阻塞）
-      try {
-        const config = {
-          nodes: workflowToSave.nodes,
-          connections: workflowToSave.connections || [],
-          blocks: (workflowToSave.nodes || []).map((node) => ({
-            id: node.id,
-            type: node.type,
-            position: { x: node.x, y: node.y },
-            config: node.config,
-          })),
-        };
-
-        const result = await Workflow.save(
-          workflowToSave.name,
-          config,
-          workflowToSave.uuid
-        );
-
-        if (result.success) {
-          console.log("工作流已同步到服务器");
-        }
-      } catch (serverError) {
-        console.warn("服务器同步失败，已保存到本地:", serverError.message);
-      }
     } catch (error) {
       showToast("保存失败: " + error.message, "error");
     }
