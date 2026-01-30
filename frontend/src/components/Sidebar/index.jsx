@@ -28,43 +28,59 @@ export default function Sidebar() {
     <>
       <div
         style={{
-          width: showSidebar ? "292px" : "0px",
-          paddingLeft: showSidebar ? "0px" : "16px",
+          width: showSidebar ? "320px" : "60px",
+          height: "calc(100vh - 0px)",
         }}
-        className="transition-all duration-500"
+        className="transition-all duration-500 relative z-30"
       >
-        <div className="flex shrink-0 w-full justify-center my-[18px]">
-          <div className="flex justify-between items-center w-[250px] min-w-[250px]">
-            <TextLogo
-              className={`transition-opacity duration-500 ${showSidebar ? "opacity-100" : "opacity-0"}`}
-            />
-            {canToggleSidebar && (
-              <ToggleSidebarButton
-                showSidebar={showSidebar}
-                setShowSidebar={setShowSidebar}
-              />
-            )}
-          </div>
-        </div>
-        <div
-          ref={sidebarRef}
-          className="relative m-[16px] rounded-[16px] bg-theme-bg-sidebar border-[2px] border-theme-sidebar-border light:border-none min-w-[250px] p-[10px] h-[calc(100%-76px)]"
-        >
-          <div className="flex flex-col h-full overflow-x-hidden">
-            <div className="flex-grow flex flex-col min-w-[235px]">
-              <div className="relative h-[calc(100%-60px)] flex flex-col w-full justify-between pt-[10px] overflow-y-scroll no-scroll">
-                <div className="flex flex-col gap-y-2 pb-[60px] gap-y-[14px] overflow-y-scroll no-scroll">
-                  <SearchBox user={user} showNewWsModal={showNewWsModal} />
-                  <ActiveWorkspaces />
-                </div>
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 pt-4 pb-3 rounded-b-[16px] bg-theme-bg-sidebar bg-opacity-80 backdrop-filter backdrop-blur-md z-1">
-                <Footer />
+        {showSidebar ? (
+          <>
+            <div className="flex shrink-0 w-full justify-center my-[18px] px-0">
+              <div className="flex justify-between items-center w-[280px] min-w-[280px]">
+                <TextLogo
+                  className={`transition-opacity duration-500 ${showSidebar ? "opacity-100" : "opacity-0"}`}
+                />
+                {canToggleSidebar && (
+                  <ToggleSidebarButton
+                    showSidebar={showSidebar}
+                    setShowSidebar={setShowSidebar}
+                  />
+                )}
               </div>
             </div>
+            <div
+              ref={sidebarRef}
+              className="relative ml-[16px] my-[16px] rounded-[16px] bg-theme-bg-sidebar border-[2px] border-theme-sidebar-border light:border-none min-w-[280px] p-[10px] h-[calc(100%-76px)]"
+            >
+              <div className="flex flex-col h-full overflow-x-hidden">
+                <div className="flex-grow flex flex-col min-w-[235px]">
+                  <div className="relative h-[calc(100%-60px)] flex flex-col w-full justify-between pt-[10px] overflow-y-scroll no-scroll">
+                    <div className="flex flex-col gap-y-2 pb-[60px] gap-y-[14px] overflow-y-scroll no-scroll">
+                      <SearchBox user={user} showNewWsModal={showNewWsModal} />
+                      <ActiveWorkspaces />
+                    </div>
+                  </div>
+                  <div className="absolute bottom-0 left-0 right-0 pt-4 pb-3 rounded-b-[16px] bg-theme-bg-sidebar bg-opacity-80 backdrop-filter backdrop-blur-md z-1">
+                    <Footer />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="h-[calc(100%-32px)] my-[16px] w-[60px] transition-all duration-500 ml-[16px]">
+            <div className="h-full bg-theme-bg-sidebar border-[2px] border-theme-sidebar-border light:border-none rounded-[16px] p-2 flex flex-col items-center gap-2">
+              {/* 展开按钮 */}
+              <button
+                onClick={() => setShowSidebar(true)}
+                className="p-2 rounded-lg hover:bg-theme-action-menu-item-hover transition-all duration-300"
+                title="展开侧边栏"
+              >
+                <List className="w-5 h-5 text-theme-text-secondary" />
+              </button>
+            </div>
           </div>
-        </div>
-        {showingNewWsModal && <NewWorkspaceModal hideModal={hideNewWsModal} />}
+        )}
       </div>
       <WorkspaceAndThreadTooltips />
     </>

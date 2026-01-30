@@ -1,9 +1,5 @@
 import { useState } from "react";
-import {
-  ArrowClockwise,
-  CircleNotch,
-  MagnifyingGlass,
-} from "@phosphor-icons/react";
+import { CircleNotch, MagnifyingGlass } from "@phosphor-icons/react";
 
 export default function ModelTableLayout({
   children,
@@ -61,10 +57,12 @@ export default function ModelTableLayout({
             {isRefreshing ? (
               <CircleNotch className="w-4 h-4 text-theme-text-secondary animate-spin" />
             ) : (
-              <ArrowClockwise
+              <span
                 weight="bold"
-                className="w-4 h-4 text-theme-text-secondary"
-              />
+                className="w-4 h-4 text-theme-text-secondary flex items-center justify-center"
+              >
+                ↻
+              </span>
             )}
             <span
               className={`text-sm font-medium ${isRefreshing ? "hidden" : "text-theme-text-secondary"}`}

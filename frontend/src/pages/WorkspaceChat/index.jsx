@@ -52,12 +52,16 @@ function ShowWorkspaceChat() {
 
   return (
     <>
-      <div className="w-screen h-screen overflow-hidden bg-theme-bg-container flex">
+      <div className="w-screen h-screen overflow-hidden bg-theme-bg-container flex relative">
         {!isMobile && <Sidebar />}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 ml-[calc(60px+5px)] mr-[calc(60px+5px)] relative z-10">
           <WorkspaceChatContainer loading={loading} workspace={workspace} />
         </div>
-        {!isMobile && <RightToolbar />}
+        {!isMobile && (
+          <div className="ml-[5px] relative z-20">
+            <RightToolbar />
+          </div>
+        )}
       </div>
     </>
   );

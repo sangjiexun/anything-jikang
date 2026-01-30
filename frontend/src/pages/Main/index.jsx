@@ -17,12 +17,16 @@ export default function Main() {
 
   const user = userFromStorage();
   return (
-    <div className="w-screen h-screen overflow-hidden bg-theme-bg-container flex">
+    <div className="w-screen h-screen overflow-hidden bg-theme-bg-container flex relative">
       {!isMobile ? <Sidebar /> : <SidebarMobileHeader />}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 relative z-10">
         {!!user && user?.role !== "admin" ? <DefaultChatContainer /> : <Home />}
       </div>
-      {!isMobile && <RightToolbar />}
+      {!isMobile && (
+        <div className="ml-[5px] relative z-20">
+          <RightToolbar />
+        </div>
+      )}
     </div>
   );
 }

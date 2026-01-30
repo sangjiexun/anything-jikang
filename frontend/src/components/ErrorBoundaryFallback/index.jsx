@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { House, ArrowClockwise, Copy, Check } from "@phosphor-icons/react";
+import { House, Copy, Check } from "@phosphor-icons/react";
 import { useState } from "react";
 
 export default function ErrorBoundaryFallback({ error, resetErrorBoundary }) {
@@ -77,7 +77,7 @@ ${details.stack}
           onClick={resetErrorBoundary}
           className="flex items-center justify-center gap-2 px-4 py-2 bg-theme-bg-secondary text-theme-text-primary rounded-lg hover:bg-theme-sidebar-item-hover transition-all duration-300 w-full md:w-auto"
         >
-          <ArrowClockwise className="w-4 h-4" />
+          <span className="w-4 h-4 flex items-center justify-center">↻</span>
           Reset
         </button>
         <NavLink

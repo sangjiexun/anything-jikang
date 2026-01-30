@@ -1,9 +1,11 @@
 import React from "react";
-import { Trash, TreeView, ArrowClockwise, PencilLine } from "@phosphor-icons/react";
+import { Trash, TreeView, PencilLine } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
-function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
+function ActionMenu({ chatId, forkThread, isEditing, role, message }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   const handleFork = () => {
     forkThread(chatId);
@@ -15,46 +17,20 @@ function ActionMenu({ chatId, forkThread, isEditing, role, message, onReask }) {
     );
   };
 
-  // 重新提问 - 将当前消息内容发送到输入框
-  const handleReask = () => {
-    if (onReask && message) {
-      onReask(message);
-    }
-  };
-
   // 跳转到智能图文工作台 - 将当前消息内容传递过去
   const handleGoToWritingWorkspace = () => {
     // 将消息内容存储到 localStorage，供图文工作台使用
     if (message) {
       localStorage.setItem("writing_workspace_content", message);
     }
-    // 触发右侧工具栏打开智能图文工作台
-    window.dispatchEvent(
-      new CustomEvent("open-writing-workspace", { detail: { content: message } })
-    );
+    // 跳转到智能图文工作台页面
+    navigate("/writing-assistant");
   };
 
   if (!chatId || isEditing || role === "user") return null;
 
   return (
     <div className="flex items-center gap-x-2">
-      {/* 重新提问按钮 */}
-      <div className="mt-3 relative">
-        <button
-          onClick={handleReask}
-          className="border-none text-zinc-300"
-          data-tooltip-id="reask-message"
-          data-tooltip-content={t("chat_window.reask")}
-          aria-label={t("chat_window.reask")}
-        >
-          <ArrowClockwise
-            color="var(--theme-sidebar-footer-icon-fill)"
-            size={20}
-            className="mb-1"
-          />
-        </button>
-      </div>
-
       {/* 跳转到智能图文工作台按钮 */}
       <div className="mt-3 relative">
         <button

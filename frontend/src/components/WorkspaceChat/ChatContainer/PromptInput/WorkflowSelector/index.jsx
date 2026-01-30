@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GitBranch, CaretDown, Play, X, Check, SpinnerGap } from "@phosphor-icons/react";
+import {
+  GitBranch,
+  CaretDown,
+  Play,
+  X,
+  Check,
+  SpinnerGap,
+} from "@phosphor-icons/react";
 import showToast from "@/utils/toast";
 import { useTranslation } from "react-i18next";
 
@@ -72,9 +79,11 @@ export default function WorkflowSelector({ queryText = "", onSelect, onRun }) {
 
     try {
       showToast(`正在运行工作流: ${selectedWorkflow.name}`, "info");
-      
+
       // 从本地加载完整的工作流数据
-      const workflowData = localStorage.getItem(`workflow_${selectedWorkflow.uuid}`);
+      const workflowData = localStorage.getItem(
+        `workflow_${selectedWorkflow.uuid}`
+      );
       if (!workflowData) {
         showToast("工作流数据未找到", "error");
         return;
@@ -135,40 +144,50 @@ export default function WorkflowSelector({ queryText = "", onSelect, onRun }) {
       // 执行节点，使用输入框文本作为初始输入
       let lastOutput = initialInput || "开始执行工作流";
       const executionLog = [];
-      
+
       executionLog.push(`📥 初始输入: ${initialInput || "(无输入)"}`);
 
       for (const node of order) {
         const nodeType = node.type;
-        
+
         // 检查是否是 LLM 节点
         if (nodeType?.startsWith("llm-") && llmConfig.apiKey) {
           try {
             executionLog.push(`🔄 执行节点: ${nodeType}`);
-            
-            const response = await fetch(`${llmConfig.endpoint}/v1/chat/completions`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${llmConfig.apiKey}`,
-              },
-              body: JSON.stringify({
-                model: llmConfig.model,
-                messages: [
-                  { role: "system", content: node.config?.systemPrompt || "你是一个有帮助的AI助手" },
-                  { role: "user", content: lastOutput },
-                ],
-                temperature: node.config?.temperature || llmConfig.temperature,
-                max_tokens: node.config?.maxTokens || llmConfig.maxTokens,
-              }),
-            });
+
+            const response = await fetch(
+              `${llmConfig.endpoint}/v1/chat/completions`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${llmConfig.apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: llmConfig.model,
+                  messages: [
+                    {
+                      role: "system",
+                      content:
+                        node.config?.systemPrompt || "你是一个有帮助的AI助手",
+                    },
+                    { role: "user", content: lastOutput },
+                  ],
+                  temperature:
+                    node.config?.temperature || llmConfig.temperature,
+                  max_tokens: node.config?.maxTokens || llmConfig.maxTokens,
+                }),
+              }
+            );
 
             if (response.ok) {
               const data = await response.json();
               lastOutput = data.choices?.[0]?.message?.content || "无响应";
               executionLog.push(`✅ ${nodeType} 完成`);
             } else {
-              executionLog.push(`⚠️ ${nodeType} API 请求失败: ${response.status}`);
+              executionLog.push(
+                `⚠️ ${nodeType} API 请求失败: ${response.status}`
+              );
             }
           } catch (e) {
             executionLog.push(`❌ ${nodeType} 执行失败: ${e.message}`);
@@ -182,7 +201,7 @@ export default function WorkflowSelector({ queryText = "", onSelect, onRun }) {
       executionLog.push(`📤 最终输出: ${lastOutput}`);
 
       showToast("工作流执行成功", "success");
-      
+
       if (onRun) {
         onRun({
           success: true,
@@ -220,18 +239,22 @@ export default function WorkflowSelector({ queryText = "", onSelect, onRun }) {
               : "text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-action-menu-item-hover"
           }`}
           data-tooltip-id="workflow-selector"
-          data-tooltip-content={selectedWorkflow ? selectedWorkflow.name : "选择工作流"}
+          data-tooltip-content={
+            selectedWorkflow ? selectedWorkflow.name : "选择工作流"
+          }
         >
           <GitBranch className="w-4 h-4" />
           {selectedWorkflow ? (
             <>
-              <span className="max-w-[80px] truncate">{selectedWorkflow.name}</span>
+              <span className="max-w-[80px] truncate">
+                {selectedWorkflow.name}
+              </span>
               <span
                 onClick={clearSelection}
                 className="p-0.5 hover:bg-indigo-500/30 rounded cursor-pointer"
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && clearSelection(e)}
+                onKeyDown={(e) => e.key === "Enter" && clearSelection(e)}
               >
                 <X className="w-3 h-3" />
               </span>
@@ -266,11 +289,11 @@ export default function WorkflowSelector({ queryText = "", onSelect, onRun }) {
             <p className="text-xs text-theme-text-secondary">选择工作流</p>
           </div>
 
-          <div 
+          <div
             className="max-h-[250px] overflow-y-auto workflow-scrollbar"
-            style={{ 
-              scrollbarWidth: 'thin', 
-              scrollbarColor: '#6b7280 transparent',
+            style={{
+              scrollbarWidth: "thin",
+              scrollbarColor: "#6b7280 transparent",
             }}
           >
             {loading ? (

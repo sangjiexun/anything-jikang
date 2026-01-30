@@ -1,5 +1,11 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+} from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Play,
@@ -10,11 +16,11 @@ import {
   FloppyDisk,
   CaretRight,
   CaretDown,
+  CaretLeft,
   X,
   MagnifyingGlassPlus,
   MagnifyingGlassMinus,
   ArrowCounterClockwise,
-  ArrowClockwise,
   ArrowsOutCardinal,
   Lightning,
   Robot,
@@ -28,7 +34,8 @@ import { NODE_TYPES, NODE_CATEGORIES } from "./nodeTypes";
 // Workflow model no longer needed - using localStorage only
 
 // 生成唯一ID
-const generateId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+const generateId = () =>
+  `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // 贝塞尔曲线路径计算
 const getBezierPath = (x1, y1, x2, y2) => {
@@ -40,6 +47,10 @@ const getBezierPath = (x1, y1, x2, y2) => {
 export default function WorkflowDesigner() {
   const canvasRef = useRef(null);
   const svgRef = useRef(null);
+  const location = useLocation();
+  const isWorkflowDesignerPath =
+    location?.pathname?.toLowerCase().includes("workflowdesigner") ||
+    location?.pathname?.toLowerCase().includes("workflow-designer");
 
   // 默认工作流结构
   const defaultWorkflow = {
@@ -60,7 +71,9 @@ export default function WorkflowDesigner() {
           ...defaultWorkflow,
           ...parsed,
           nodes: Array.isArray(parsed.nodes) ? parsed.nodes : [],
-          connections: Array.isArray(parsed.connections) ? parsed.connections : [],
+          connections: Array.isArray(parsed.connections)
+            ? parsed.connections
+            : [],
         };
       } catch (e) {
         console.error("Failed to load workflow:", e);
@@ -76,12 +89,36 @@ export default function WorkflowDesigner() {
     NODE_CATEGORIES?.map((c) => c.id) || []
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
 
   // 执行状态
   const [executingNodeId, setExecutingNodeId] = useState(null);
   const [executionLogs, setExecutionLogs] = useState([]);
   const [executionResult, setExecutionResult] = useState(null);
   const [showResultPanel, setShowResultPanel] = useState(false);
+
+  // 左侧面板折叠状态持久化
+  // 自动展开左侧工具栏 on page load
+  useEffect(() => {
+    // 强制展开工具栏
+    setIsLeftPanelCollapsed(false);
+    localStorage.setItem(
+      "workflow_left_panel_collapsed",
+      JSON.stringify(false)
+    );
+  }, []);
+
+  useEffect(() => {
+    // 保留之前的使用习惯：若需要持久化可自行查看 localStorage，但此处强制自动展开工具栏，避免被记忆值影响
+    // 不覆盖已设置的初始展开状态
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "workflow_left_panel_collapsed",
+      JSON.stringify(isLeftPanelCollapsed)
+    );
+  }, [isLeftPanelCollapsed]);
   const [nodeResults, setNodeResults] = useState({});
 
   // 画布状态
@@ -125,7 +162,7 @@ export default function WorkflowDesigner() {
     }
     return {
       endpoint: "https://api.deepseek.com",
-      apiKey: "",
+      apiKey: "sk-0b0817fc4f264176875c961c3632a80b",
       model: "deepseek-chat",
       temperature: 0.7,
       maxTokens: 2048,
@@ -285,14 +322,14 @@ export default function WorkflowDesigner() {
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
       return;
     }
-    
+
     // Alt + 左键 - 也可以拖拽画布
     if (e.button === 0 && e.altKey) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
       return;
     }
-    
+
     // 左键点击空白区域 - 取消选中
     if (e.target === canvasRef.current || e.target === svgRef.current) {
       setSelectedNode(null);
@@ -318,7 +355,9 @@ export default function WorkflowDesigner() {
       setWorkflow((prev) => ({
         ...prev,
         nodes: prev.nodes.map((n) =>
-          n.id === draggedNode ? { ...n, x: Math.max(0, x), y: Math.max(0, y) } : n
+          n.id === draggedNode
+            ? { ...n, x: Math.max(0, x), y: Math.max(0, y) }
+            : n
         ),
       }));
     }
@@ -420,7 +459,9 @@ export default function WorkflowDesigner() {
       // 确保有 UUID
       const workflowToSave = {
         ...workflow,
-        uuid: workflow.uuid || `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        uuid:
+          workflow.uuid ||
+          `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         updatedAt: new Date().toISOString(),
       };
 
@@ -439,7 +480,9 @@ export default function WorkflowDesigner() {
       }
 
       // 更新或添加工作流到列表
-      const existingIndex = localWorkflows.findIndex((w) => w.uuid === workflowToSave.uuid);
+      const existingIndex = localWorkflows.findIndex(
+        (w) => w.uuid === workflowToSave.uuid
+      );
       const workflowSummary = {
         uuid: workflowToSave.uuid,
         name: workflowToSave.name,
@@ -458,7 +501,10 @@ export default function WorkflowDesigner() {
       localStorage.setItem("workflow_list", JSON.stringify(localWorkflows));
 
       // 保存完整工作流数据
-      localStorage.setItem(`workflow_${workflowToSave.uuid}`, JSON.stringify(workflowToSave));
+      localStorage.setItem(
+        `workflow_${workflowToSave.uuid}`,
+        JSON.stringify(workflowToSave)
+      );
 
       // 更新状态
       setWorkflow(workflowToSave);
@@ -496,7 +542,7 @@ export default function WorkflowDesigner() {
     if (!confirm("确定要删除当前工作流吗？此操作不可恢复。")) {
       return;
     }
-    
+
     try {
       // 从工作流列表中移除
       if (workflow.uuid) {
@@ -509,14 +555,14 @@ export default function WorkflowDesigner() {
         } catch (e) {
           console.error("Error loading local workflows:", e);
         }
-        
+
         localWorkflows = localWorkflows.filter((w) => w.uuid !== workflow.uuid);
         localStorage.setItem("workflow_list", JSON.stringify(localWorkflows));
-        
+
         // 删除工作流数据
         localStorage.removeItem(`workflow_${workflow.uuid}`);
       }
-      
+
       // 清空当前工作流，变为空白工作流
       const emptyWorkflow = {
         id: generateId(),
@@ -570,13 +616,13 @@ export default function WorkflowDesigner() {
       switch (node.type) {
         case "llm-deepseek":
         case "llm-gemini":
-        case "llm-qwen":
+        case "llm-qwen": {
           // LLM 节点 - 调用 API
           if (!llmConfig.apiKey) {
             throw new Error("请先配置大模型 API Key");
           }
           addLog("info", `调用 ${config.title} API...`, node.id);
-          
+
           // 确保用户消息是字符串
           let userMessage = "你好";
           if (inputData) {
@@ -588,37 +634,45 @@ export default function WorkflowDesigner() {
               userMessage = String(inputData);
             }
           }
-          
+
           const requestBody = {
             model: llmConfig.model,
             messages: [
-              { role: "system", content: node.config?.systemPrompt || "你是一个有帮助的AI助手" },
+              {
+                role: "system",
+                content: node.config?.systemPrompt || "你是一个有帮助的AI助手",
+              },
               { role: "user", content: userMessage },
             ],
-            temperature: node.config?.temperature || llmConfig.temperature || 0.7,
+            temperature:
+              node.config?.temperature || llmConfig.temperature || 0.7,
             max_tokens: node.config?.maxTokens || llmConfig.maxTokens || 2048,
           };
-          
+
           addLog("info", `请求模型: ${requestBody.model}`, node.id);
-          
-          const llmResponse = await fetch(`${llmConfig.endpoint}/v1/chat/completions`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${llmConfig.apiKey}`,
-            },
-            body: JSON.stringify(requestBody),
-          });
+
+          const llmResponse = await fetch(
+            `${llmConfig.endpoint}/v1/chat/completions`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${llmConfig.apiKey}`,
+              },
+              body: JSON.stringify(requestBody),
+            }
+          );
 
           if (!llmResponse.ok) {
             let errorMessage = `API请求失败: ${llmResponse.status}`;
             try {
               const errorData = await llmResponse.json();
-              errorMessage = errorData.error?.message || errorData.message || errorMessage;
+              errorMessage =
+                errorData.error?.message || errorData.message || errorMessage;
             } catch (e) {
               // 无法解析错误响应
             }
-            
+
             if (llmResponse.status === 400) {
               throw new Error(`请求格式错误: ${errorMessage}`);
             } else if (llmResponse.status === 401) {
@@ -635,16 +689,19 @@ export default function WorkflowDesigner() {
           const llmData = await llmResponse.json();
           result = llmData.choices?.[0]?.message?.content || "无响应内容";
           break;
+        }
 
-        case "trigger-manual":
+        case "trigger-manual": {
           result = { triggered: true, timestamp: new Date().toISOString() };
           break;
+        }
 
-        case "trigger-schedule":
+        case "trigger-schedule": {
           result = { scheduled: true, cron: node.config?.cron || "0 * * * *" };
           break;
+        }
 
-        case "code-js":
+        case "code-js": {
           // JavaScript 代码执行
           addLog("info", "执行 JavaScript 代码...", node.id);
           try {
@@ -655,18 +712,29 @@ export default function WorkflowDesigner() {
             throw new Error(`代码执行错误: ${e.message}`);
           }
           break;
+        }
 
-        case "http-request":
+        case "http-request": {
           // HTTP 请求
-          addLog("info", `发送 HTTP ${node.config?.method || "GET"} 请求...`, node.id);
-          const httpResponse = await fetch(node.config?.url || "https://httpbin.org/get", {
-            method: node.config?.method || "GET",
-            headers: node.config?.headers ? JSON.parse(node.config.headers) : {},
-          });
+          addLog(
+            "info",
+            `发送 HTTP ${node.config?.method || "GET"} 请求...`,
+            node.id
+          );
+          const httpResponse = await fetch(
+            node.config?.url || "https://httpbin.org/get",
+            {
+              method: node.config?.method || "GET",
+              headers: node.config?.headers
+                ? JSON.parse(node.config.headers)
+                : {},
+            }
+          );
           result = await httpResponse.json();
           break;
+        }
 
-        case "condition":
+        case "condition": {
           // 条件判断
           const condition = node.config?.condition || "true";
           try {
@@ -676,17 +744,19 @@ export default function WorkflowDesigner() {
             result = { passed: false, error: e.message };
           }
           break;
+        }
 
-        case "chat":
+        case "chat": {
           // 聊天输出
           result = { output: inputData, type: "chat" };
           break;
+        }
 
         default:
           // 其他节点模拟执行
           await new Promise((r) => setTimeout(r, 500 + Math.random() * 500));
-          result = { 
-            nodeType: node.type, 
+          result = {
+            nodeType: node.type,
             input: inputData,
             output: `${config.title} 执行完成`,
           };
@@ -694,7 +764,7 @@ export default function WorkflowDesigner() {
 
       const duration = Date.now() - startTime;
       addLog("success", `节点执行完成 (${duration}ms)`, node.id);
-      
+
       // 保存节点结果
       setNodeResults((prev) => ({
         ...prev,
@@ -717,18 +787,18 @@ export default function WorkflowDesigner() {
   const buildExecutionGraph = () => {
     const nodes = workflow.nodes || [];
     const connections = workflow.connections || [];
-    
+
     // 构建入度表、邻接表和前驱表
     const inDegree = {};
     const adjacency = {}; // 后继节点
     const predecessors = {}; // 前驱节点
-    
+
     nodes.forEach((node) => {
       inDegree[node.id] = 0;
       adjacency[node.id] = [];
       predecessors[node.id] = [];
     });
-    
+
     connections.forEach((conn) => {
       if (adjacency[conn.from]) {
         adjacency[conn.from].push(conn.to);
@@ -740,10 +810,10 @@ export default function WorkflowDesigner() {
         predecessors[conn.to].push(conn.from);
       }
     });
-    
+
     // 找到所有入度为0的节点（起始节点）
     const startNodes = nodes.filter((node) => inDegree[node.id] === 0);
-    
+
     return { nodes, inDegree, adjacency, predecessors, startNodes };
   };
 
@@ -793,24 +863,28 @@ export default function WorkflowDesigner() {
     const startTime = Date.now();
 
     try {
-      const { nodes, inDegree, adjacency, predecessors, startNodes } = buildExecutionGraph();
-      
+      const { nodes, inDegree, adjacency, predecessors, startNodes } =
+        buildExecutionGraph();
+
       if (startNodes.length === 0) {
         throw new Error("未找到起始节点（请确保有触发器或无输入的节点）");
       }
 
-      addLog("info", `共 ${nodes.length} 个节点，${startNodes.length} 个起始节点`);
-      
+      addLog(
+        "info",
+        `共 ${nodes.length} 个节点，${startNodes.length} 个起始节点`
+      );
+
       // 显示用户输入的 query
       if (queryInput) {
         addLog("info", `📝 用户输入: ${queryInput}`);
       }
-      
+
       // 检测工作流模式
       const hasFork = nodes.some((n) => isForkNode(n.id, adjacency));
       const hasJoin = nodes.some((n) => isJoinNode(n.id, predecessors));
       const hasCondition = nodes.some((n) => isConditionalNode(n.type));
-      
+
       if (hasFork) addLog("info", "📊 检测到并行分支模式");
       if (hasJoin) addLog("info", "🔀 检测到并行汇聚模式");
       if (hasCondition) addLog("info", "🔀 检测到条件分支模式");
@@ -825,7 +899,9 @@ export default function WorkflowDesigner() {
       // 执行单个节点并返回结果
       const runNode = async (node) => {
         // 收集所有前驱节点的输出作为输入
-        const inputs = predecessors[node.id].map((predId) => allResults[predId]);
+        const inputs = predecessors[node.id].map(
+          (predId) => allResults[predId]
+        );
         // 如果只有一个输入，直接传递；否则传递数组
         // 对于起始节点（无前驱），使用用户输入的 queryInput
         let inputData;
@@ -837,11 +913,11 @@ export default function WorkflowDesigner() {
           // 起始节点使用用户输入
           inputData = queryInput || null;
         }
-        
+
         const result = await executeNode(node, inputData);
         allResults[node.id] = result;
         completed.add(node.id);
-        
+
         return { node, result };
       };
 
@@ -849,7 +925,7 @@ export default function WorkflowDesigner() {
       const evaluateCondition = (node, result) => {
         const nextNodes = adjacency[node.id];
         if (nextNodes.length <= 1) return nextNodes;
-        
+
         // 条件节点：根据结果选择分支
         if (node.type === "condition") {
           const passed = result?.passed ?? true;
@@ -862,7 +938,7 @@ export default function WorkflowDesigner() {
             return nextNodes.length > 1 ? [nextNodes[1]] : [];
           }
         }
-        
+
         return nextNodes;
       };
 
@@ -872,25 +948,28 @@ export default function WorkflowDesigner() {
 
       while (currentLevel.length > 0) {
         const isParallel = currentLevel.length > 1;
-        
+
         if (isParallel) {
-          addLog("info", `⚡ 第 ${levelCount} 层: 并行执行 ${currentLevel.length} 个节点`);
-          
+          addLog(
+            "info",
+            `⚡ 第 ${levelCount} 层: 并行执行 ${currentLevel.length} 个节点`
+          );
+
           // 并行执行当前层的所有节点
           const results = await Promise.all(currentLevel.map(runNode));
-          
+
           addLog("success", `✓ 第 ${levelCount} 层并行执行完成`);
-          
+
           // 收集下一层节点
           const nextLevel = new Set();
-          
+
           for (const { node, result } of results) {
             // 处理条件分支
             const nextNodeIds = evaluateCondition(node, result);
-            
+
             for (const nextId of nextNodeIds) {
               currentInDegree[nextId]--;
-              
+
               // 只有当所有前驱都完成时才加入下一层（汇聚点）
               if (currentInDegree[nextId] === 0) {
                 const nextNode = nodes.find((n) => n.id === nextId);
@@ -900,21 +979,21 @@ export default function WorkflowDesigner() {
               }
             }
           }
-          
+
           currentLevel = Array.from(nextLevel);
         } else {
           // 单节点执行（链式）
           const node = currentLevel[0];
           const { result } = await runNode(node);
-          
+
           // 处理条件分支
           const nextNodeIds = evaluateCondition(node, result);
-          
+
           // 更新下一层
           currentLevel = [];
           for (const nextId of nextNodeIds) {
             currentInDegree[nextId]--;
-            
+
             if (currentInDegree[nextId] === 0) {
               const nextNode = nodes.find((n) => n.id === nextId);
               if (nextNode && !completed.has(nextId)) {
@@ -923,16 +1002,19 @@ export default function WorkflowDesigner() {
             }
           }
         }
-        
+
         levelCount++;
       }
 
       const totalDuration = Date.now() - startTime;
-      
+
       // 找到最终输出（没有后继的节点）
       const endNodes = nodes.filter((n) => adjacency[n.id].length === 0);
-      const finalOutputs = endNodes.map((n) => allResults[n.id]).filter(Boolean);
-      const finalOutput = finalOutputs.length === 1 ? finalOutputs[0] : finalOutputs;
+      const finalOutputs = endNodes
+        .map((n) => allResults[n.id])
+        .filter(Boolean);
+      const finalOutput =
+        finalOutputs.length === 1 ? finalOutputs[0] : finalOutputs;
 
       addLog("success", `✅ 工作流执行完成 (总耗时: ${totalDuration}ms)`);
 
@@ -1045,21 +1127,24 @@ export default function WorkflowDesigner() {
 只返回JSON，不要其他解释。`;
 
     try {
-      const response = await fetch(`${llmConfig.endpoint}/v1/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${llmConfig.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: llmConfig.model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: aiPrompt },
-          ],
-          temperature: 0.7,
-        }),
-      });
+      const response = await fetch(
+        `${llmConfig.endpoint}/v1/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${llmConfig.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: llmConfig.model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: aiPrompt },
+            ],
+            temperature: 0.7,
+          }),
+        }
+      );
 
       if (!response.ok) {
         if (response.status === 402) {
@@ -1168,22 +1253,22 @@ export default function WorkflowDesigner() {
 
     const wheelHandler = (e) => {
       e.preventDefault();
-      
+
       const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
-      
+
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      
+
       setZoom((prevZoom) => {
         const newZoom = Math.min(Math.max(prevZoom * delta, 0.2), 3);
         const zoomRatio = newZoom / prevZoom;
-        
+
         setPan((prevPan) => ({
           x: mouseX - (mouseX - prevPan.x) * zoomRatio,
           y: mouseY - (mouseY - prevPan.y) * zoomRatio,
         }));
-        
+
         return newZoom;
       });
     };
@@ -1194,8 +1279,7 @@ export default function WorkflowDesigner() {
 
   return (
     <div className="flex h-screen bg-theme-bg-container">
-      {/* 左侧边栏 */}
-      <Sidebar />
+      {/* <Sidebar /> */}
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -1253,7 +1337,9 @@ export default function WorkflowDesigner() {
               className="p-2 rounded-lg text-theme-text-secondary hover:bg-theme-action-menu-item-hover disabled:opacity-30 transition-colors"
               title="重做 (Ctrl+Shift+Z)"
             >
-              <ArrowClockwise className="w-5 h-5" />
+              <span className="w-5 h-5 flex items-center justify-center text-theme-text-secondary">
+                ↻
+              </span>
             </button>
 
             <div className="w-px h-6 bg-theme-sidebar-border mx-2" />
@@ -1321,15 +1407,32 @@ export default function WorkflowDesigner() {
         {/* 工作区 */}
         <div className="flex-1 flex overflow-hidden">
           {/* 节点面板 */}
-          <div className="w-64 bg-theme-bg-secondary border-r border-theme-sidebar-border overflow-y-auto flex flex-col">
-            <div className="p-3 border-b border-theme-sidebar-border">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索节点..."
-                className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
-              />
+          <div
+            className={`transition-all duration-300 ${isLeftPanelCollapsed ? "w-0 overflow-hidden" : "w-64 overflow-y-auto"} bg-theme-bg-secondary border-r border-theme-sidebar-border flex flex-col`}
+          >
+            <div className="p-3 border-b border-theme-sidebar-border flex items-center gap-2">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜索节点..."
+                  className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <button
+                onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
+                className="p-1.5 hover:bg-theme-action-menu-item-hover rounded-lg transition-colors flex items-center justify-center w-7 h-7"
+                title={
+                  isLeftPanelCollapsed ? "展开左侧工具栏" : "收起左侧工具栏"
+                }
+              >
+                {isLeftPanelCollapsed ? (
+                  <CaretLeft className="w-4 h-4 text-theme-text-secondary rotate-0" />
+                ) : (
+                  <CaretLeft className="w-4 h-4 text-theme-text-secondary rotate-180" />
+                )}
+              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2">
@@ -1366,7 +1469,9 @@ export default function WorkflowDesigner() {
                           <div
                             key={nodeType}
                             draggable
-                            onDragStart={(e) => handlePanelDragStart(e, nodeType)}
+                            onDragStart={(e) =>
+                              handlePanelDragStart(e, nodeType)
+                            }
                             className="flex items-center gap-2 px-2 py-1.5 bg-theme-bg-primary rounded cursor-grab hover:bg-theme-action-menu-item-hover transition-colors"
                           >
                             <div
@@ -1419,7 +1524,13 @@ export default function WorkflowDesigner() {
               }}
             >
               <defs>
-                <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <linearGradient
+                  id="connectionGradient"
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="0%"
+                >
                   <stop offset="0%" stopColor="#6366f1" />
                   <stop offset="100%" stopColor="#10b981" />
                 </linearGradient>
@@ -1427,8 +1538,12 @@ export default function WorkflowDesigner() {
 
               {/* 现有连接 */}
               {(workflow.connections || []).map((conn) => {
-                const fromNode = (workflow.nodes || []).find((n) => n.id === conn.from);
-                const toNode = (workflow.nodes || []).find((n) => n.id === conn.to);
+                const fromNode = (workflow.nodes || []).find(
+                  (n) => n.id === conn.from
+                );
+                const toNode = (workflow.nodes || []).find(
+                  (n) => n.id === conn.to
+                );
                 if (!fromNode || !toNode) return null;
 
                 const x1 = fromNode.x + 180;
@@ -1462,7 +1577,13 @@ export default function WorkflowDesigner() {
                       className="pointer-events-none transition-all"
                     />
                     {/* 箭头 */}
-                    <circle cx={x2} cy={y2} r="4" fill="#10b981" className="pointer-events-none" />
+                    <circle
+                      cx={x2}
+                      cy={y2}
+                      r="4"
+                      fill="#10b981"
+                      className="pointer-events-none"
+                    />
                   </g>
                 );
               })}
@@ -1506,12 +1627,12 @@ export default function WorkflowDesigner() {
                       isExecuting
                         ? "border-yellow-500 shadow-yellow-500/50 scale-105 animate-pulse"
                         : nodeResult?.success
-                        ? "border-green-500 shadow-green-500/30"
-                        : nodeResult?.error
-                        ? "border-red-500 shadow-red-500/30"
-                        : isSelected
-                        ? "border-blue-500 shadow-blue-500/30"
-                        : "border-theme-sidebar-border hover:border-theme-text-secondary"
+                          ? "border-green-500 shadow-green-500/30"
+                          : nodeResult?.error
+                            ? "border-red-500 shadow-red-500/30"
+                            : isSelected
+                              ? "border-blue-500 shadow-blue-500/30"
+                              : "border-theme-sidebar-border hover:border-theme-text-secondary"
                     }`}
                     style={{ left: node.x, top: node.y }}
                     onMouseDown={(e) => handleNodeDragStart(e, node.id)}
@@ -1562,10 +1683,16 @@ export default function WorkflowDesigner() {
                     {config.inputs.length > 0 && (
                       <div
                         className={`absolute -left-3 top-1/2 w-6 h-6 bg-blue-500 border-2 border-white rounded-full transform -translate-y-1/2 cursor-crosshair hover:scale-125 transition-transform flex items-center justify-center z-10 ${
-                          isConnecting ? "animate-pulse ring-2 ring-blue-400" : ""
+                          isConnecting
+                            ? "animate-pulse ring-2 ring-blue-400"
+                            : ""
                         }`}
-                        onMouseDown={(e) => handleConnectionPointMouseDown(e, node.id, false)}
-                        onMouseUp={(e) => handleConnectionPointMouseUp(e, node.id, false)}
+                        onMouseDown={(e) =>
+                          handleConnectionPointMouseDown(e, node.id, false)
+                        }
+                        onMouseUp={(e) =>
+                          handleConnectionPointMouseUp(e, node.id, false)
+                        }
                       >
                         <div className="w-2 h-2 bg-white rounded-full" />
                       </div>
@@ -1575,8 +1702,12 @@ export default function WorkflowDesigner() {
                     {config.outputs.length > 0 && (
                       <div
                         className="absolute -right-3 top-1/2 w-6 h-6 bg-green-500 border-2 border-white rounded-full transform -translate-y-1/2 cursor-crosshair hover:scale-125 transition-transform flex items-center justify-center z-10"
-                        onMouseDown={(e) => handleConnectionPointMouseDown(e, node.id, true)}
-                        onMouseUp={(e) => handleConnectionPointMouseUp(e, node.id, true)}
+                        onMouseDown={(e) =>
+                          handleConnectionPointMouseDown(e, node.id, true)
+                        }
+                        onMouseUp={(e) =>
+                          handleConnectionPointMouseUp(e, node.id, true)
+                        }
                       >
                         <div className="w-2 h-2 bg-white rounded-full" />
                       </div>
@@ -1644,11 +1775,11 @@ export default function WorkflowDesigner() {
             {(workflow.nodes || []).length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center">
-                  <Lightning className="w-16 h-16 text-theme-text-secondary/20 mx-auto mb-4" />
-                  <p className="text-theme-text-secondary text-lg">
+                  <Lightning className="w-16 h-16 text-white mx-auto mb-4" />
+                  <p className="text-white text-lg">
                     从左侧拖拽节点到画布开始设计工作流
                   </p>
-                  <p className="text-theme-text-secondary/60 text-sm mt-2">
+                  <p className="text-white/60 text-sm mt-2">
                     按住 Alt + 左键拖动画布，Ctrl + 滚轮缩放
                   </p>
                 </div>
@@ -1661,7 +1792,9 @@ export default function WorkflowDesigner() {
             <div className="w-72 bg-theme-bg-secondary border-l border-theme-sidebar-border overflow-y-auto">
               <div className="p-4">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-theme-text-primary font-medium">节点配置</h3>
+                  <h3 className="text-theme-text-primary font-medium">
+                    节点配置
+                  </h3>
                   <button
                     onClick={() => setSelectedNode(null)}
                     className="p-1 hover:bg-theme-action-menu-item-hover rounded"
@@ -1671,7 +1804,9 @@ export default function WorkflowDesigner() {
                 </div>
 
                 {(() => {
-                  const node = (workflow.nodes || []).find((n) => n.id === selectedNode);
+                  const node = (workflow.nodes || []).find(
+                    (n) => n.id === selectedNode
+                  );
                   if (!node) return null;
                   const config = getNodeConfig(node.type);
                   if (!config) return null;
@@ -1697,16 +1832,43 @@ export default function WorkflowDesigner() {
 
                       {/* 配置项 */}
                       <div className="space-y-3">
-                        {Object.entries(node.config || {}).map(([key, value]) => (
-                          <div key={key}>
-                            <label className="block text-sm text-theme-text-secondary mb-1 capitalize">
-                              {key}
-                            </label>
-                            {typeof value === "boolean" ? (
-                              <label className="flex items-center gap-2">
+                        {Object.entries(node.config || {}).map(
+                          ([key, value]) => (
+                            <div key={key}>
+                              <label className="block text-sm text-theme-text-secondary mb-1 capitalize">
+                                {key}
+                              </label>
+                              {typeof value === "boolean" ? (
+                                <label className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={value}
+                                    onChange={(e) =>
+                                      setWorkflow((prev) => ({
+                                        ...prev,
+                                        nodes: prev.nodes.map((n) =>
+                                          n.id === node.id
+                                            ? {
+                                                ...n,
+                                                config: {
+                                                  ...n.config,
+                                                  [key]: e.target.checked,
+                                                },
+                                              }
+                                            : n
+                                        ),
+                                      }))
+                                    }
+                                    className="w-4 h-4"
+                                  />
+                                  <span className="text-sm text-theme-text-primary">
+                                    启用
+                                  </span>
+                                </label>
+                              ) : typeof value === "number" ? (
                                 <input
-                                  type="checkbox"
-                                  checked={value}
+                                  type="number"
+                                  value={value}
                                   onChange={(e) =>
                                     setWorkflow((prev) => ({
                                       ...prev,
@@ -1716,90 +1878,67 @@ export default function WorkflowDesigner() {
                                               ...n,
                                               config: {
                                                 ...n.config,
-                                                [key]: e.target.checked,
+                                                [key]:
+                                                  parseFloat(e.target.value) ||
+                                                  0,
                                               },
                                             }
                                           : n
                                       ),
                                     }))
                                   }
-                                  className="w-4 h-4"
+                                  className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
                                 />
-                                <span className="text-sm text-theme-text-primary">
-                                  启用
-                                </span>
-                              </label>
-                            ) : typeof value === "number" ? (
-                              <input
-                                type="number"
-                                value={value}
-                                onChange={(e) =>
-                                  setWorkflow((prev) => ({
-                                    ...prev,
-                                    nodes: prev.nodes.map((n) =>
-                                      n.id === node.id
-                                        ? {
-                                            ...n,
-                                            config: {
-                                              ...n.config,
-                                              [key]: parseFloat(e.target.value) || 0,
-                                            },
-                                          }
-                                        : n
-                                    ),
-                                  }))
-                                }
-                                className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
-                              />
-                            ) : key.includes("Prompt") ||
-                              key.includes("code") ||
-                              key.includes("Template") ? (
-                              <textarea
-                                value={value}
-                                onChange={(e) =>
-                                  setWorkflow((prev) => ({
-                                    ...prev,
-                                    nodes: prev.nodes.map((n) =>
-                                      n.id === node.id
-                                        ? {
-                                            ...n,
-                                            config: {
-                                              ...n.config,
-                                              [key]: e.target.value,
-                                            },
-                                          }
-                                        : n
-                                    ),
-                                  }))
-                                }
-                                rows={4}
-                                className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500 resize-none"
-                              />
-                            ) : (
-                              <input
-                                type="text"
-                                value={value}
-                                onChange={(e) =>
-                                  setWorkflow((prev) => ({
-                                    ...prev,
-                                    nodes: prev.nodes.map((n) =>
-                                      n.id === node.id
-                                        ? {
-                                            ...n,
-                                            config: {
-                                              ...n.config,
-                                              [key]: e.target.value,
-                                            },
-                                          }
-                                        : n
-                                    ),
-                                  }))
-                                }
-                                className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
-                              />
-                            )}
-                          </div>
-                        ))}
+                              ) : key.includes("Prompt") ||
+                                key.includes("code") ||
+                                key.includes("Template") ? (
+                                <textarea
+                                  value={value}
+                                  onChange={(e) =>
+                                    setWorkflow((prev) => ({
+                                      ...prev,
+                                      nodes: prev.nodes.map((n) =>
+                                        n.id === node.id
+                                          ? {
+                                              ...n,
+                                              config: {
+                                                ...n.config,
+                                                [key]: e.target.value,
+                                              },
+                                            }
+                                          : n
+                                      ),
+                                    }))
+                                  }
+                                  rows={4}
+                                  className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500 resize-none"
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={value}
+                                  onChange={(e) =>
+                                    setWorkflow((prev) => ({
+                                      ...prev,
+                                      nodes: prev.nodes.map((n) =>
+                                        n.id === node.id
+                                          ? {
+                                              ...n,
+                                              config: {
+                                                ...n.config,
+                                                [key]: e.target.value,
+                                              },
+                                            }
+                                          : n
+                                      ),
+                                    }))
+                                  }
+                                  className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
+                                />
+                              )}
+                            </div>
+                          )
+                        )}
                       </div>
 
                       {/* 连接信息 */}
@@ -1928,7 +2067,8 @@ export default function WorkflowDesigner() {
 
               <div className="bg-theme-bg-primary/50 rounded-lg p-3">
                 <p className="text-xs text-theme-text-secondary">
-                  💡 提示：详细描述工作流的用途、需要的输入输出、处理步骤等，AI将为你生成完整的工作流配置。
+                  💡
+                  提示：详细描述工作流的用途、需要的输入输出、处理步骤等，AI将为你生成完整的工作流配置。
                 </p>
               </div>
             </div>
@@ -1988,7 +2128,10 @@ export default function WorkflowDesigner() {
                   type="text"
                   value={llmConfig.endpoint}
                   onChange={(e) =>
-                    setLLMConfig((prev) => ({ ...prev, endpoint: e.target.value }))
+                    setLLMConfig((prev) => ({
+                      ...prev,
+                      endpoint: e.target.value,
+                    }))
                   }
                   placeholder="https://api.deepseek.com"
                   className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
@@ -2003,9 +2146,12 @@ export default function WorkflowDesigner() {
                   type="password"
                   value={llmConfig.apiKey}
                   onChange={(e) =>
-                    setLLMConfig((prev) => ({ ...prev, apiKey: e.target.value }))
+                    setLLMConfig((prev) => ({
+                      ...prev,
+                      apiKey: "sk-0b0817fc4f264176875c961c3632a80b",
+                    }))
                   }
-                  placeholder="sk-..."
+                  placeholder="sk,,,"
                   className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-sidebar-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -2074,7 +2220,8 @@ export default function WorkflowDesigner() {
 
               <div className="bg-theme-bg-primary/50 rounded-lg p-3">
                 <p className="text-xs text-theme-text-secondary">
-                  💡 这些配置将用于工作流中的LLM节点执行和AI创建功能。配置会自动保存到本地。
+                  💡
+                  这些配置将用于工作流中的LLM节点执行和AI创建功能。配置会自动保存到本地。
                 </p>
               </div>
             </div>
@@ -2104,7 +2251,7 @@ export default function WorkflowDesigner() {
           {/* 面板头部 */}
           <div className="flex items-center justify-between p-3 border-b border-theme-sidebar-border bg-theme-bg-primary/50">
             <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
-              <Lightning className="w-4 h-4 text-yellow-400" />
+              <Lightning className="w-4 h-4 text-white" />
               执行日志
               {isRunning && (
                 <SpinnerGap className="w-4 h-4 animate-spin text-yellow-400" />
@@ -2135,13 +2282,14 @@ export default function WorkflowDesigner() {
                   log.type === "error"
                     ? "bg-red-500/10 text-red-400"
                     : log.type === "success"
-                    ? "bg-green-500/10 text-green-400"
-                    : log.type === "warning"
-                    ? "bg-yellow-500/10 text-yellow-400"
-                    : "bg-theme-bg-primary/50 text-theme-text-secondary"
+                      ? "bg-green-500/10 text-green-400"
+                      : log.type === "warning"
+                        ? "bg-yellow-500/10 text-yellow-400"
+                        : "bg-theme-bg-primary/50 text-theme-text-secondary"
                 }`}
               >
-                <span className="opacity-50">[{log.timestamp}]</span> {log.message}
+                <span className="opacity-50">[{log.timestamp}]</span>{" "}
+                {log.message}
               </div>
             ))}
             {executionLogs.length === 0 && (
@@ -2162,10 +2310,12 @@ export default function WorkflowDesigner() {
                   耗时: {executionResult.duration}ms
                 </span>
               </div>
-              
+
               {executionResult.finalOutput && (
                 <div className="mt-2">
-                  <p className="text-xs text-theme-text-secondary mb-1">最终输出:</p>
+                  <p className="text-xs text-theme-text-secondary mb-1">
+                    最终输出:
+                  </p>
                   <pre className="text-xs bg-theme-bg-primary p-2 rounded overflow-x-auto max-h-[100px] overflow-y-auto text-theme-text-primary">
                     {typeof executionResult.finalOutput === "string"
                       ? executionResult.finalOutput
@@ -2176,7 +2326,9 @@ export default function WorkflowDesigner() {
 
               {executionResult.error && (
                 <div className="mt-2">
-                  <p className="text-xs text-red-400">{executionResult.error}</p>
+                  <p className="text-xs text-red-400">
+                    {executionResult.error}
+                  </p>
                 </div>
               )}
             </div>

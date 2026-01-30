@@ -62,7 +62,6 @@ const Actions = ({
             isEditing={isEditing}
             role={role}
             message={message}
-            onReask={(content) => sendCommand && sendCommand({ text: content, autoSubmit: false })}
           />
         </div>
       </div>

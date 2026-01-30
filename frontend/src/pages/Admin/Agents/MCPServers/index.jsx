@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { titleCase } from "text-case";
-import { BookOpenText, ArrowClockwise } from "@phosphor-icons/react";
+import { titleCase } from "@/utils/textCase";
+import { BookOpenText } from "@phosphor-icons/react";
 import MCPLogo from "@/media/agents/mcp-logo.svg";
 import MCPServers from "@/models/mcpServers";
 import showToast from "@/utils/toast";
@@ -66,10 +66,9 @@ export function MCPServerHeader({
             disabled={loadingMcpServers}
             className="border-none text-theme-text-secondary hover:text-cta-button flex items-center gap-x-1"
           >
-            <ArrowClockwise
-              size={16}
-              className={loadingMcpServers ? "animate-spin" : ""}
-            />
+            <span size={16} className={loadingMcpServers ? "animate-spin" : ""}>
+              ↻
+            </span>
             <p className="text-sm">
               {loadingMcpServers ? "Loading..." : "Refresh"}
             </p>
